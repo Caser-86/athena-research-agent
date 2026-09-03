@@ -218,3 +218,5 @@ python -m app.eval.harness --threshold 0.5
 ```
 
 当前 Docker 容器内全量 **45 项 pytest 测试通过**；GitHub Actions CI（单测 + 评测回归门禁）已在 [main 分支](https://github.com/Caser-86/athena-research-agent/actions) 实测通过。
+
+真实模型全量评测（deepseek-v4-flash，3 轮迭代，golden set=4）：overall **0.8775 → PASS**；对照单轮 0.8025——Critic 打回回路带来覆盖率 0.67→0.92、成功率 0.25→0.75（详见 [metrics](docs/metrics.md)）。
