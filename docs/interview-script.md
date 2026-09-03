@@ -10,10 +10,10 @@
 
 "整体架构分四层：
 
-1. **前端**：左右分屏工作区，左侧展示实时 Agent 执行轨迹和拓扑图，右侧生成 Markdown 报告和可观测数据。
-2. **网关**：FastAPI + SSE 流式推送，支持 API Key 鉴权和 CORS 收敛。
+1. **前端**：现代 Agent 工作台，三栏布局——左侧 Agent 泳道（每个 Agent 独立轨道、状态实时高亮），中间 Artifact 画布（计划 → 检索 → 分析 → 评审 → 报告按阶段切换），右侧 Inspector（可观测 KPI + 时延瀑布 + 工具调用链 + Trace）。
+2. **网关**：FastAPI + SSE 流式推送，支持 API Key 鉴权和 CORS 收敛，带并发任务队列（信号量限流）。
 3. **编排引擎**：基于 LangGraph 的 StateGraph，五个节点协作——Planner 拆任务、Researcher 检索、Analyst 综合分析、Critic 质量评审、Writer 出报告。Critic 不通过会打回 Researcher 补充，最多重试 N 轮。
-4. **基础设施**：PostgreSQL + pgvector 做向量和任务持久化；自研 MCP 工具服务暴露 web_search、sql_query 等工具；LLM 接的是火山方舟 deepseek-v4-flash。"
+4. **基础设施**：PostgreSQL + pgvector 做向量和任务持久化；自研 MCP 工具服务暴露 web_search、sql_query 等工具；LLM 接的是火山方舟 deepseek-v4-flash；全部 Docker Compose 一键编排，CI 跑单测 + 评测门禁。"
 
 ---
 
@@ -36,12 +36,12 @@
 ## 四、现场演示（2 分钟）
 
 1. 打开 http://localhost:8888
-2. 展示顶部模型状态：`模型 deepseek-v4-flash · 最大迭代 1`
-3. 输入问题："对比比亚迪、蔚来、理想 2024 年报的核心财务指标与差异化战略"
-4. 点击运行，观察左侧 Agent 拓扑图高亮：Planner → Researcher → Analyst → Critic → Writer
-5. 右侧展示生成的 Markdown 报告
-6. 右下可观测面板展示：5 次 LLM 调用、约 9500 token、成本约 ¥0.043
-7. 打开"历史任务"抽屉，展示之前跑过的真实任务已落库
+2. 展示顶部状态栏：模型状态（deepseek-v4-flash）+ 队列状态 + 累计成本
+3. 输入问题："对比比亚迪、蔚来、理想 2024 年报的核心财务指标与差异化战略"，Enter 发送
+4. 观察左侧 Agent 泳道依次高亮：Planner → Researcher → Analyst → Critic → Writer
+5. 中间 Artifact 画布按阶段切换：执行计划清单 → 检索结果卡片 → 综合分析 → Critic 评审 → 最终 Markdown 报告
+6. 右侧 Inspector 实时刷新：LLM 调用数、Token、成本（约 ¥0.04/轮）、Agent 时延瀑布、MCP 工具链
+7. 点击顶部"历史"按钮唤出历史任务抽屉，展示真实任务已落库 PostgreSQL，可点击回看
 
 ---
 
@@ -60,7 +60,7 @@
 
 ## 六、收尾（30 秒）
 
-"这个项目覆盖了一条完整的 Agent 产品链路：工作流设计、检索增强、工具链、可观测、评测、部署。后续还可以接入 Langfuse 做更完整的企业级 trace，或者接入真实搜索 API 替代演示检索。"
+"项目已开源在 GitHub，带 CI 门禁——每次提交自动跑 45 项单测和四维评测，评测不达标直接阻断合并，保证改动质量。整个项目覆盖了一条完整的 Agent 产品链路：工作流设计、检索增强、工具链、可观测、评测、部署。后续还可以接入 Langfuse 做更完整的企业级 trace，或者接入真实搜索 API 替代演示检索。"
 
 ---
 

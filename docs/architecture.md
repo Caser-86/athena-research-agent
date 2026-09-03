@@ -3,9 +3,9 @@
 ## 系统分层
 
 ```
-用户 · Next.js 工作台（轨迹回放 / 评测看板）        ← 第4周
-        │ SSE
-FastAPI 异步网关（鉴权/限流/权益 · SSE 流式）
+用户 · Agent 工作台（静态前端 + Nginx：泳道 / Artifact 画布 / Inspector）
+        │ SSE（/api 反向代理）
+FastAPI 异步网关（API Key 鉴权 · CORS 白名单 · 并发队列限流 · SSE 流式）
         │
 LangGraph StateGraph 编排（5-Agent 状态机）
 Planner → Researcher → Analyst → Critic ◄─(打回)─┐
@@ -17,7 +17,9 @@ Planner → Researcher → Analyst → Critic ◄─(打回)─┐
         ▼                                        │
     长期经验记忆(ExperienceMemory)                │
         ▼                                        │
-   OpenTelemetry → Langfuse（可观测，第3周）       │
+   内置可观测层 obs.py（→ 可选迁移 Langfuse）
+        ▼                                        │
+   PostgreSQL + pgvector（任务持久化 + 向量检索，HNSW）
 ```
 
 ## ADR-001：编排框架选 LangGraph 而非 CrewAI / AutoGen
@@ -46,8 +48,8 @@ Planner → Researcher → Analyst → Critic ◄─(打回)─┐
 
 **理由**：中文 + 垂直领域，纯向量丢专有名词（模型名、品牌、缩写）召回；BM25 兜底词面匹配。
 
-**实现**：向量余弦 + BM25，RRF 融合，结果按融合分重排。第 4 周换 bge-reranker 做交叉重排。
-**存储演进**：进程内 DocumentStore → PostgreSQL + pgvector（仅替换 `store` 接口）。
+**实现**：向量余弦 + BM25，RRF 融合，结果按融合分重排。重排可再升级 bge-reranker 做交叉重排。
+**存储演进（已完成）**：进程内 DocumentStore → **PostgreSQL + pgvector（HNSW 索引）**，通过 `ATHENA_VECTOR_STORE=postgres` 切换，`VectorBackend` 协议（add_document / hybrid_search / count）统一两种后端。
 
 ## ADR-004：工具统一走 MCP，而非裸 Function Calling
 
@@ -59,8 +61,12 @@ Planner → Researcher → Analyst → Critic ◄─(打回)─┐
 **理由**：不评测 = 无法证明更优。把四维评测作为 PR 门禁，任何改动都必须通过回归。
 诚实原则：当前演示模式数字基于真实本地 RAG 检索，接入真实模型后以真实语义打分为准。
 
-## ADR-006：当前存储为何用内存
+## ADR-006：存储分层——内存起步，SQL 演进（已落地）
 
-**范围**：`_tasks`、`MemorySaver`、`DocumentStore`、`ExperienceMemory` 均为进程内。
-**理由**：第 1-3 周聚焦编排与评测，内存足够且无外部基础设施依赖，CI 无 Key 可跑。
-**迁移计划**：第 4 周统一到 PostgreSQL（任务表 + checkpointer + pgvector）。
+**范围**：`_tasks`（观测）、`MemorySaver`（图状态）、`DocumentStore`（向量）、`ExperienceMemory`（经验）均为进程内；任务历史与向量检索已演进到 SQL。
+**决策过程**：初期聚焦编排与评测，内存实现零依赖、CI 无 Key 可跑；随后抽象 `StorageBackend` / `VectorBackend` 接口，保持测试在 SQLite 上全量验证。
+**当前状态（已完成演进）**：
+- 任务持久化：`SqlStorage`（SQLAlchemy，SQLite/PostgreSQL 同一套 `research_tasks` schema），生产走 `ATHENA_PG_DSN` 指向 PostgreSQL，任务可跨进程回看；
+- 向量检索：`PgVectorStore`（doc_chunks 表 + HNSW 索引 + 余弦距离 top-K），`ATHENA_VECTOR_STORE=postgres` 启用；
+- 部署：docker-compose 一键拉起 db（pgvector/postgres）+ api + web。
+**后续**：图状态 checkpointer 迁移 LangGraph `PostgresSaver`（断点续跑），接口已预留。
