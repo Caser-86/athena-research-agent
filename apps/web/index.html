@@ -144,16 +144,32 @@
   .latency-bar>i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
   .latency-val{width:85px;text-align:right;color:var(--muted);font-family:var(--mono)}
 
-  /* input bar */
-  .input-area{padding:14px 18px;background:var(--bg-elevated);border-top:1px solid var(--border)}
-  .input-wrap{display:flex;gap:10px;align-items:flex-end;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;box-shadow:var(--shadow-sm)}
-  .input-wrap:focus-within{border-color:rgba(92,141,255,.5);box-shadow:0 0 0 3px rgba(92,141,255,.08)}
-  textarea#q{flex:1;background:transparent;border:none;color:var(--text);font-size:14px;resize:none;outline:none;min-height:22px;max-height:120px;font-family:inherit;line-height:1.5}
-  textarea#q::placeholder{color:var(--muted)}
-  .send-btn{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#fff;display:grid;place-items:center;cursor:pointer;transition:.15s;box-shadow:0 4px 12px rgba(92,141,255,.3)}
-  .send-btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(92,141,255,.35)}
+  /* hero input (核心位置) */
+  .hero-area{flex:1;display:grid;place-items:center;padding:20px;min-height:0;position:relative;overflow:auto}
+  .hero-area::before{content:"";position:absolute;inset:0;background:radial-gradient(600px 320px at 50% 38%,rgba(92,141,255,.14),transparent 70%),radial-gradient(500px 300px at 50% 62%,rgba(124,92,255,.10),transparent 70%);pointer-events:none}
+  .hero-inner{position:relative;width:100%;max-width:700px;text-align:center;padding:10px}
+  .hero-mark{width:52px;height:52px;margin:0 auto 14px;border-radius:16px;display:grid;place-items:center;font-weight:800;font-size:22px;color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 10px 30px rgba(92,141,255,.35)}
+  .hero-title{font-size:26px;font-weight:800;letter-spacing:.5px;margin-bottom:6px}
+  .hero-sub{font-size:13px;color:var(--text-secondary);margin-bottom:22px}
+  .hero-input-wrap{display:flex;gap:10px;align-items:flex-end;background:var(--bg-elevated);border:1px solid var(--border-light);border-radius:22px;padding:14px 16px;box-shadow:0 14px 50px rgba(0,0,0,.5);transition:.2s}
+  .hero-input-wrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 4px rgba(92,141,255,.14),0 14px 50px rgba(0,0,0,.5)}
+  .hero-input-wrap textarea#q{flex:1;background:transparent;border:none;color:var(--text);font-size:16px;resize:none;outline:none;min-height:26px;max-height:140px;font-family:inherit;line-height:1.5}
+  .hero-input-wrap textarea#q::placeholder{color:var(--muted)}
+  .send-btn{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#fff;display:grid;place-items:center;cursor:pointer;transition:.15s;box-shadow:0 4px 12px rgba(92,141,255,.35);flex-shrink:0}
+  .send-btn:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(92,141,255,.45)}
   .send-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
-  .input-hints{display:flex;gap:14px;margin-top:8px;padding-left:4px;font-size:11px;color:var(--muted)}
+  .input-hints{display:flex;gap:16px;justify-content:center;margin-top:10px;font-size:11px;color:var(--muted)}
+  .example-chips{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:18px;align-items:center}
+  .chip-label{font-size:12px;color:var(--muted);margin-right:2px}
+  .chip{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:7px 14px;color:var(--text-secondary);font-size:12px;cursor:pointer;transition:.15s}
+  .chip:hover{border-color:var(--accent);color:var(--text);background:var(--surface3)}
+
+  /* work bar (运行/结果态顶部输入) */
+  .work-bar{padding:12px 18px;background:var(--bg-elevated);border-bottom:1px solid var(--border);flex-shrink:0}
+  .work-bar .input-wrap{display:flex;gap:10px;align-items:flex-end;background:var(--surface);border:1px solid var(--border-light);border-radius:var(--radius-sm);padding:9px 12px;box-shadow:var(--shadow-sm);transition:.2s}
+  .work-bar .input-wrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(92,141,255,.12)}
+  .work-bar textarea#q2{flex:1;background:transparent;border:none;color:var(--text);font-size:14px;resize:none;outline:none;min-height:22px;max-height:100px;font-family:inherit;line-height:1.5}
+  .work-bar textarea#q2::placeholder{color:var(--muted)}
 
   /* trace panel */
   .trace-line{font-family:var(--mono);font-size:11px;color:var(--text-secondary);padding:6px 0;border-bottom:1px solid var(--border);display:flex;gap:8px}
@@ -212,15 +228,45 @@
       </div>
 
       <!-- canvas -->
-      <div class="canvas">
+      <div class="canvas" id="canvasWrap">
         <div class="canvas-header">
           <div class="canvas-title" id="canvasTitle">🎨 Artifact 画布</div>
           <div class="canvas-actions">
+            <button class="icon-btn" onclick="goHome()">🏠 首页</button>
             <button class="icon-btn" onclick="copyReport()">复制</button>
             <button class="icon-btn" onclick="downloadReport()">下载</button>
             <button class="icon-btn" onclick="toggleHistory()">历史</button>
           </div>
         </div>
+
+        <!-- hero input：核心位置 -->
+        <div class="hero-area" id="heroArea">
+          <div class="hero-inner">
+            <div class="hero-mark">A</div>
+            <div class="hero-title">研究任何问题</div>
+            <div class="hero-sub">五个专业智能体协作 · RAG 检索 + MCP 工具 · 带引用出报告</div>
+            <div class="hero-input-wrap">
+              <textarea id="q" rows="1" placeholder="输入研究问题，例如：对比比亚迪、蔚来、理想 2024 年报的核心财务指标与差异化战略…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();run()}"></textarea>
+              <button class="send-btn" id="runBtn" onclick="run()"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+            </div>
+            <div class="input-hints"><span>↵ 发送</span><span>Shift + ↵ 换行</span><span id="modeHint">—</span></div>
+            <div class="example-chips">
+              <span class="chip-label">试试：</span>
+              <button class="chip" onclick="useExample(0)">对比比亚迪、蔚来、理想 2024 年报</button>
+              <button class="chip" onclick="useExample(1)">小米 SU7 的竞争格局与销量复盘</button>
+              <button class="chip" onclick="useExample(2)">国产大模型商业化路径分析</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- work bar：运行/结果态顶部输入 -->
+        <div class="work-bar" id="workBar" style="display:none">
+          <div class="input-wrap">
+            <textarea id="q2" rows="1" placeholder="换个问题继续研究…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();run()}"></textarea>
+            <button class="send-btn" id="runBtn2" onclick="run()"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+          </div>
+        </div>
+
         <div id="artifactBox">
           <div class="thinking-card">
             <div class="thinking-header">🧠 Athena 已就绪</div>
@@ -252,19 +298,6 @@
           <div id="toolChain"></div>
         </div>
         <div class="inspector-body" id="inspectorTrace" style="display:none"></div>
-      </div>
-    </div>
-
-    <!-- input -->
-    <div class="input-area">
-      <div class="input-wrap">
-        <textarea id="q" rows="1" placeholder="输入研究问题，例如：对比比亚迪、蔚来、理想 2024 年报的核心财务指标与差异化战略…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();run()}"></textarea>
-        <button class="send-btn" id="runBtn" onclick="run()"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
-      </div>
-      <div class="input-hints">
-        <span>↵ 发送</span>
-        <span>Shift + ↵ 换行</span>
-        <span id="modeHint">—</span>
       </div>
     </div>
   </div>
@@ -377,11 +410,33 @@ function addTrace(ev,data){
 }
 
 // run
+function getQ(){ const hero=document.getElementById("heroArea"); return (hero && hero.style.display!=="none" ? document.getElementById("q") : document.getElementById("q2")).value.trim(); }
+function setQ(v){ document.getElementById("q").value=v; document.getElementById("q2").value=v; }
+function setMode(mode){
+  const hero=document.getElementById("heroArea"), work=document.getElementById("workBar"), box=document.getElementById("artifactBox");
+  if(mode==="hero"){ hero.style.display="grid"; work.style.display="none"; box.style.display="none"; setTimeout(()=>{const t=document.getElementById("q"); t.focus(); t.select();},50); }
+  else { hero.style.display="none"; work.style.display="block"; box.style.display="block"; }
+}
+function goHome(){
+  setMode("hero"); setQ("");
+  initLanes(); traceLines.length=0; document.getElementById("inspectorTrace").innerHTML="";
+  document.getElementById("artifactBox").innerHTML=`<div class="thinking-card"><div class="thinking-header">🧠 Athena 已就绪</div><ul class="thinking-bullets"><li>输入研究问题，Planner 会拆解成可执行子任务</li><li>Researcher 调用 MCP 工具检索，Analyst 综合分析</li><li>Critic 评审质量，Writer 输出带引用结构的报告</li></ul></div>`;
+  document.getElementById("canvasTitle").textContent="🎨 Artifact 画布";
+  loadObs();
+}
+const EXAMPLES=[
+  "对比比亚迪、蔚来、理想 2024 年报的核心财务指标与差异化战略",
+  "分析小米 SU7 上市后的市场竞争格局与销量表现",
+  "梳理国产大模型商业化路径与关键挑战"
+];
+function useExample(i){ goHome(); setQ(EXAMPLES[i]||""); }
 async function run(){
-  const q=document.getElementById("q").value.trim(); if(!q) return;
+  const q=getQ(); if(!q) return;
+  setMode("work"); setQ(q);
   initLanes(); traceLines.length=0; document.getElementById("inspectorTrace").innerHTML="";
   renderThinking("正在理解问题并制定计划…");
-  const btn=document.getElementById("runBtn"); btn.disabled=true;
+  const btn=document.getElementById("runBtn"), btn2=document.getElementById("runBtn2");
+  btn.disabled=true; btn2.disabled=true;
   document.getElementById("statusDot").classList.add("busy");
   startQueuePolling();
   try{
@@ -417,7 +472,7 @@ async function run(){
   }catch(e){
     document.getElementById("artifactBox").innerHTML=`<div class="artifact"><div class="artifact-title">❌ 运行失败</div><div class="analysis-body">${esc(e.message)}</div></div>`;
   }finally{
-    btn.disabled=false; document.getElementById("statusDot").classList.remove("busy");
+    btn.disabled=false; btn2.disabled=false; document.getElementById("statusDot").classList.remove("busy");
   }
 }
 
@@ -481,12 +536,12 @@ function fmtDate(iso){ if(!iso)return"—"; try{const d=new Date(iso); return d.
 async function viewTask(id){
   try{
     const t=await (await fetch(API+"/api/research/tasks/"+encodeURIComponent(id))).json();
-    document.getElementById("q").value=t.question; renderReport(t.report||""); toggleHistory();
+    setQ(t.question); setMode("work"); renderReport(t.report||""); toggleHistory();
     initLanes(); setLane("writer","done");
   }catch(e){ toast("加载历史失败"); }
 }
 
-window.addEventListener("load",()=>{ loadHistory(); loadObs(); });
+window.addEventListener("load",()=>{ setMode("hero"); loadHistory(); loadObs(); });
 window.addEventListener("click",e=>{ const o=document.getElementById("historyOverlay"); if(!o.contains(e.target) && !e.target.closest(".icon-btn")) o.style.display="none"; });
 </script>
 </body>
