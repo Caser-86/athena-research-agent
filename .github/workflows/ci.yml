@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: 单测 + 评测回归门禁
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: "apps/api/requirements.txt"
+
+      - name: Install deps
+        working-directory: apps/api
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      # 单元测试：无 Key 演示模式即可跑，验证编排回路 / RAG / MCP / HITL / 评测
+      - name: Run unit tests
+        working-directory: apps/api
+        run: python -m pytest -q
+
+      # 评测回归门禁：全量 golden set 跑评测，未达阈值则阻断合并
+      # （无 Key 演示模式即基于真实本地 RAG 检索打分，PR 级回归在真实 Key 下更严格）
+      - name: Eval harness gate
+        working-directory: apps/api
+        run: |
+          python -m app.eval.harness --threshold 0.5 \
+            --out ../../eval-report.json
+        env:
+          # CI 无真实 Key，走演示模式
+          ATHENA_LLM_API_KEY: ""
+
+      - name: Upload eval report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-report
+          path: eval-report.json

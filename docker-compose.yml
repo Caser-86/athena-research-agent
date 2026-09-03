@@ -1,0 +1,73 @@
+# Athena · 一键启动应用编排（PostgreSQL + pgvector + API + Web）
+#
+# 用法：
+#   1. 拷贝 apps/api/.env.example 到 apps/api/.env，按需填 LLM Key / API Key
+#   2. docker compose up -d --build
+#   3. 打开 http://localhost:8888 （Web 前端，同源代理 /api）
+#
+# 说明：
+#   - db 使用 pgvector/pgvector:pg16，自带 vector 扩展，无需手动装
+#   - api 通过 ATHENA_PG_DSN 连 db，AUTHENA_VECTOR_STORE=postgres 走 pgvector 检索
+#   - web 用 Nginx 托管静态页并反代 /api，前端同源访问，规避跨域
+name: athena
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: athena-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: athena
+      POSTGRES_PASSWORD: athena_dev
+      POSTGRES_DB: athena
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U athena -d athena"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    ports:
+      # 容器内 5432 不必暴露到宿主，除非你想用本机 psql 连
+      - "127.0.0.1:55432:5432"
+
+  api:
+    build: ./apps/api
+    container_name: athena-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # 存储 / 向量后端全部指向容器内 db 服务
+      ATHENA_PG_DSN: postgresql+psycopg://athena:athena_dev@db:5432/athena
+      ATHENA_VECTOR_STORE: postgres
+      # 模型（从宿主 .env 注入；不填则走演示模式）
+      ATHENA_LLM_BASE_URL: ${ATHENA_LLM_BASE_URL:-}
+      ATHENA_LLM_API_KEY: ${ATHENA_LLM_API_KEY:-}
+      ATHENA_LLM_MODEL: ${ATHENA_LLM_MODEL:-deepseek-chat}
+      # 平台自身 API Key：可选，配置后业务路由需 Bearer 鉴权
+      ATHENA_API_KEY: ${ATHENA_API_KEY:-}
+      # 请求超时等护栏
+      ATHENA_REQUEST_TIMEOUT_SECONDS: ${ATHENA_REQUEST_TIMEOUT_SECONDS:-300}
+      # 编排迭代上限：演示容器可用 .env 覆盖为 1 以显著缩短真实模型时延；测试基线保持 3
+      ATHENA_MAX_ITERATIONS: ${ATHENA_MAX_ITERATIONS:-3}
+    env_file:
+      # 可选：apps/api/.env 会作为补充（如 Tavily、embedding 等）
+      - path: ./apps/api/.env
+        required: false
+      # 顶层部署 .env（若存在）
+      - path: ./deploy/.env
+        required: false
+
+  web:
+    build: ./apps/web
+    container_name: athena-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "8888:80"
+
+volumes:
+  pgdata:

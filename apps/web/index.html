@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Athena · 多智能体研究平台</title>
+<style>
+  :root{
+    color-scheme:dark;
+    --bg:#090b10;
+    --bg-elevated:#0f1218;
+    --surface:#141820;
+    --surface2:#1b2130;
+    --surface3:#232a3c;
+    --border:#2a3142;
+    --border-light:#3d465c;
+    --text:#f0f2f7;
+    --text-secondary:#9da6bb;
+    --muted:#6b7385;
+    --accent:#5c8dff;
+    --accent2:#7c5cff;
+    --accent3:#00d4aa;
+    --warn:#f5b452;
+    --bad:#ff6b6b;
+    --radius:16px;
+    --radius-sm:12px;
+    --radius-xs:8px;
+    --mono:"SF Mono",Consolas,Menlo,monospace;
+    --shadow:0 10px 40px rgba(0,0,0,.45);
+    --shadow-sm:0 2px 10px rgba(0,0,0,.25);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;overflow:hidden;height:100vh}
+
+  /* header */
+  header{height:52px;display:flex;align-items:center;gap:12px;padding:0 18px;background:var(--bg-elevated);border-bottom:1px solid var(--border);flex-shrink:0;justify-content:space-between}
+  .brand{display:flex;align-items:center;gap:12px}
+  .logo{width:30px;height:30px;border-radius:8px;display:grid;place-items:center;font-weight:800;color:#fff;font-size:13px;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 4px 12px rgba(92,141,255,.25)}
+  header h1{font-size:14px;margin:0;letter-spacing:.3px}
+  .global-status{display:flex;align-items:center;gap:16px;font-size:12px;color:var(--text-secondary)}
+  .pill{display:inline-flex;align-items:center;gap:6px;background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:4px 12px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--accent3);box-shadow:0 0 6px var(--accent3)}
+  .dot.mock{background:var(--warn);box-shadow:0 0 6px var(--warn)}
+  .dot.busy{background:var(--accent);animation:pulse 1s infinite}
+
+  /* app layout */
+  #app{display:flex;height:calc(100vh - 52px)}
+  .main{flex:1;display:flex;flex-direction:column;min-width:0;position:relative}
+
+  /* workspace */
+  .workspace{flex:1;display:flex;min-height:0}
+  .lane-panel{width:280px;background:var(--bg-elevated);border-right:1px solid var(--border);display:flex;flex-direction:column;min-width:0}
+  .lane-header{padding:14px 16px 10px;font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.6px}
+  #lanes{flex:1;overflow:auto;padding:0 12px 14px}
+  .lane{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-xs);margin-bottom:10px;overflow:hidden}
+  .lane-head{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--surface2);cursor:pointer;transition:.15s}
+  .lane-head:hover{background:var(--surface3)}
+  .lane-icon{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;font-size:10px;font-weight:700;background:var(--surface3);color:var(--text-secondary)}
+  .lane-name{flex:1;font-size:12px;font-weight:600;color:var(--text-secondary)}
+  .lane-state{font-size:11px;color:var(--muted)}
+  .lane-body{padding:8px;display:none}
+  .lane.open .lane-body{display:block}
+  .lane.active{border-color:rgba(92,141,255,.4);box-shadow:0 0 0 1px rgba(92,141,255,.08)}
+  .lane.active .lane-icon{background:var(--accent);color:#fff}
+  .lane.active .lane-name{color:var(--text)}
+  .lane.done .lane-icon{background:rgba(0,212,170,.15);color:var(--accent3)}
+  .lane.fail .lane-icon{background:rgba(255,107,107,.15);color:var(--bad)}
+
+  .mini-step{font-size:11px;color:var(--text-secondary);padding:6px 8px;border-radius:6px;background:var(--bg-elevated);margin-bottom:4px;border-left:2px solid transparent}
+  .mini-step.active{border-left-color:var(--accent);background:rgba(92,141,255,.08)}
+
+  /* artifact canvas */
+  .canvas{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+  .canvas-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--bg-elevated)}
+  .canvas-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px}
+  .canvas-actions{display:flex;gap:6px}
+  .icon-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text-secondary);border-radius:8px;padding:5px 10px;cursor:pointer;font-size:12px;transition:.15s}
+  .icon-btn:hover{background:var(--surface3);color:var(--text)}
+  #artifactBox{flex:1;overflow:auto;padding:24px 28px}
+
+  /* empty / thinking */
+  .thinking-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:18px;margin-bottom:16px}
+  .thinking-header{display:flex;align-items:center;gap:10px;margin-bottom:10px;color:var(--text-secondary);font-size:12px;font-weight:600}
+  .thinking-bullets{list-style:none;padding:0;margin:0}
+  .thinking-bullets li{padding:5px 0;color:var(--muted);font-size:13px;display:flex;gap:8px}
+  .thinking-bullets li::before{content:"•";color:var(--accent)}
+
+  /* artifacts */
+  .artifact{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:20px;margin-bottom:16px;box-shadow:var(--shadow-sm)}
+  .artifact-title{font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.5px;margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .plan-list{display:grid;gap:10px}
+  .plan-item{display:flex;gap:12px;padding:12px;background:var(--surface2);border-radius:var(--radius-xs);border:1px solid var(--border)}
+  .plan-num{width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:11px;font-weight:700;flex-shrink:0}
+  .plan-item h4{margin:0 0 4px;font-size:13px;color:var(--text)}
+  .plan-item p{margin:0;font-size:12px;color:var(--muted)}
+
+  .search-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
+  .search-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-xs);padding:14px;transition:.15s}
+  .search-card:hover{border-color:var(--border-light)}
+  .search-card h4{margin:0 0 6px;font-size:13px;color:#cfe0ff}
+  .search-card .url{font-size:10px;color:var(--muted);margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .search-card p{margin:0;font-size:12px;color:var(--text-secondary);line-height:1.5}
+
+  .analysis-body{line-height:1.8;color:var(--text-secondary)}
+  .analysis-body h3{color:var(--text);margin-top:0}
+  .analysis-body strong{color:var(--text)}
+  .analysis-body ul{padding-left:20px}
+
+  .critic-score{display:flex;gap:16px;margin-bottom:14px}
+  .score-box{text-align:center;padding:14px 18px;background:var(--surface2);border-radius:var(--radius-xs);border:1px solid var(--border);min-width:80px}
+  .score-box .n{font-size:24px;font-weight:700;color:var(--text)}
+  .score-box .l{font-size:10px;color:var(--muted);margin-top:2px;text-transform:uppercase}
+  .critic-verdict{padding:10px 14px;border-radius:var(--radius-xs);font-size:13px;font-weight:600;margin-bottom:10px}
+  .critic-verdict.pass{background:rgba(0,212,170,.1);color:var(--accent3);border:1px solid rgba(0,212,170,.2)}
+  .critic-verdict.fail{background:rgba(255,107,107,.1);color:var(--bad);border:1px solid rgba(255,107,107,.2)}
+
+  .report-body{font-size:14px;line-height:1.85;color:var(--text-secondary)}
+  .report-body h1,.report-body h2,.report-body h3{color:var(--text);margin-top:24px}
+  .report-body h1{font-size:24px;border-bottom:1px solid var(--border);padding-bottom:12px;margin-top:0}
+  .report-body ul{padding-left:22px}
+  .report-body li{margin:6px 0}
+  .report-body strong{color:var(--text)}
+  .report-body blockquote{border-left:3px solid var(--accent);margin:0;padding-left:16px;color:var(--text-secondary)}
+
+  /* tool calls */
+  .tool-call{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-xs);padding:12px;margin-bottom:10px}
+  .tool-call .kind{display:inline-block;background:rgba(124,92,255,.15);color:#c5b3ff;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;margin-bottom:6px}
+  .tool-call pre{background:var(--surface);padding:10px;border-radius:6px;overflow:auto;font-family:var(--mono);font-size:11px;border:1px solid var(--border);margin:0;color:#9fdc86}
+
+  /* right inspector */
+  .inspector{width:300px;background:var(--bg-elevated);border-left:1px solid var(--border);display:flex;flex-direction:column;min-width:0}
+  .inspector-tabs{display:flex;border-bottom:1px solid var(--border)}
+  .inspector-tab{flex:1;background:transparent;border:none;color:var(--muted);padding:12px;font-size:12px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent}
+  .inspector-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+  .inspector-body{flex:1;overflow:auto;padding:14px}
+  .kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-xs);padding:12px}
+  .kpi .v{font-size:18px;font-weight:700;color:var(--text)}
+  .kpi .l{font-size:10px;color:var(--muted);margin-top:4px;text-transform:uppercase;letter-spacing:.4px}
+  .section-title{font-size:11px;font-weight:700;color:var(--text-secondary);margin:14px 0 10px;text-transform:uppercase;letter-spacing:.5px}
+  .latency-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11px}
+  .latency-name{width:60px;color:var(--text-secondary);font-weight:600}
+  .latency-bar{flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden}
+  .latency-bar>i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+  .latency-val{width:85px;text-align:right;color:var(--muted);font-family:var(--mono)}
+
+  /* input bar */
+  .input-area{padding:14px 18px;background:var(--bg-elevated);border-top:1px solid var(--border)}
+  .input-wrap{display:flex;gap:10px;align-items:flex-end;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;box-shadow:var(--shadow-sm)}
+  .input-wrap:focus-within{border-color:rgba(92,141,255,.5);box-shadow:0 0 0 3px rgba(92,141,255,.08)}
+  textarea#q{flex:1;background:transparent;border:none;color:var(--text);font-size:14px;resize:none;outline:none;min-height:22px;max-height:120px;font-family:inherit;line-height:1.5}
+  textarea#q::placeholder{color:var(--muted)}
+  .send-btn{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#fff;display:grid;place-items:center;cursor:pointer;transition:.15s;box-shadow:0 4px 12px rgba(92,141,255,.3)}
+  .send-btn:hover{transform:translateY(-1px);box-shadow:0 6px 16px rgba(92,141,255,.35)}
+  .send-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
+  .input-hints{display:flex;gap:14px;margin-top:8px;padding-left:4px;font-size:11px;color:var(--muted)}
+
+  /* trace panel */
+  .trace-line{font-family:var(--mono);font-size:11px;color:var(--text-secondary);padding:6px 0;border-bottom:1px solid var(--border);display:flex;gap:8px}
+  .trace-time{color:var(--muted);width:50px;flex-shrink:0}
+  .trace-ev{color:var(--accent)}
+  .trace-ag{color:var(--accent3)}
+
+  /* history */
+  .history-item{padding:10px;border-radius:8px;cursor:pointer;border:1px solid transparent;margin-bottom:6px;background:var(--surface);transition:.15s}
+  .history-item:hover{border-color:var(--border-light)}
+  .history-item .q{font-weight:600;font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .history-item .meta{font-size:11px;color:var(--muted);margin-top:4px}
+
+  /* tabs */
+  .full-panel{flex:1;padding:24px;overflow:auto;display:none}
+  .full-panel.active{display:block}
+  .top-tabs{display:flex;gap:8px;margin-bottom:16px}
+  .top-tab{padding:8px 14px;border-radius:20px;border:1px solid var(--border);background:var(--surface2);color:var(--text-secondary);font-size:12px;cursor:pointer}
+  .top-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  /* toast */
+  #toast{position:fixed;right:20px;bottom:90px;background:var(--surface3);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:12px 18px;box-shadow:var(--shadow);opacity:0;transform:translateY(10px);transition:.2s;pointer-events:none;z-index:100;font-size:13px}
+  #toast.show{opacity:1;transform:translateY(0)}
+
+  /* animations */
+  @keyframes pulse{0%{opacity:.4}50%{opacity:1}100%{opacity:.4}}
+  .skeleton{height:12px;background:linear-gradient(90deg,var(--surface2),var(--surface3),var(--surface2));background-size:200% 100%;animation:sweep 1.5s infinite;border-radius:4px;margin-bottom:8px}
+  @keyframes sweep{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+  @media(max-width:1024px){
+    .inspector{display:none}
+    .lane-panel{width:220px}
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">
+    <div class="logo">A</div>
+    <h1>Athena · 多智能体研究平台</h1>
+  </div>
+  <div class="global-status">
+    <span class="pill"><span class="dot" id="statusDot"></span><span id="health">连接中…</span></span>
+    <span class="pill" id="queuePill" style="display:none">队列：运行 <b id="runCount">0</b> · 等待 <b id="waitCount">0</b></span>
+    <span class="pill">累计成本 <b id="totalCost">¥0.0000</b></span>
+  </div>
+</header>
+
+<div id="app">
+  <div class="main">
+    <div class="workspace">
+      <!-- lanes -->
+      <div class="lane-panel">
+        <div class="lane-header">Agent 泳道</div>
+        <div id="lanes"></div>
+      </div>
+
+      <!-- canvas -->
+      <div class="canvas">
+        <div class="canvas-header">
+          <div class="canvas-title" id="canvasTitle">🎨 Artifact 画布</div>
+          <div class="canvas-actions">
+            <button class="icon-btn" onclick="copyReport()">复制</button>
+            <button class="icon-btn" onclick="downloadReport()">下载</button>
+            <button class="icon-btn" onclick="toggleHistory()">历史</button>
+          </div>
+        </div>
+        <div id="artifactBox">
+          <div class="thinking-card">
+            <div class="thinking-header">🧠 Athena 已就绪</div>
+            <ul class="thinking-bullets">
+              <li>输入研究问题，Planner 会拆解成可执行子任务</li>
+              <li>Researcher 调用 MCP 工具检索，Analyst 综合分析</li>
+              <li>Critic 评审质量，Writer 输出带引用结构的报告</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- inspector -->
+      <div class="inspector">
+        <div class="inspector-tabs">
+          <button class="inspector-tab active" onclick="setInspector('obs')">可观测</button>
+          <button class="inspector-tab" onclick="setInspector('trace')">Trace</button>
+        </div>
+        <div class="inspector-body" id="inspectorObs">
+          <div class="kpi-grid">
+            <div class="kpi"><div class="v" id="kpiCalls">—</div><div class="l">LLM 调用</div></div>
+            <div class="kpi"><div class="v" id="kpiTools">—</div><div class="l">MCP 工具</div></div>
+            <div class="kpi"><div class="v" id="kpiCost">—</div><div class="l">成本</div></div>
+            <div class="kpi"><div class="v" id="kpiTokens">—</div><div class="l">Tokens</div></div>
+          </div>
+          <div class="section-title">Agent 时延瀑布</div>
+          <div id="latencyBars"></div>
+          <div class="section-title">MCP 工具链</div>
+          <div id="toolChain"></div>
+        </div>
+        <div class="inspector-body" id="inspectorTrace" style="display:none"></div>
+      </div>
+    </div>
+
+    <!-- input -->
+    <div class="input-area">
+      <div class="input-wrap">
+        <textarea id="q" rows="1" placeholder="输入研究问题，例如：对比比亚迪、蔚来、理想 2024 年报的核心财务指标与差异化战略…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();run()}"></textarea>
+        <button class="send-btn" id="runBtn" onclick="run()"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+      </div>
+      <div class="input-hints">
+        <span>↵ 发送</span>
+        <span>Shift + ↵ 换行</span>
+        <span id="modeHint">—</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- history overlay -->
+<div id="historyOverlay" style="display:none;position:fixed;right:20px;top:72px;width:360px;max-height:60vh;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow);z-index:90;overflow:auto;padding:14px">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <span style="font-size:13px;font-weight:700">历史任务</span>
+    <button class="icon-btn" onclick="loadHistory()">刷新</button>
+  </div>
+  <div id="historyList"><div class="muted">暂无历史任务</div></div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const API = (new URLSearchParams(location.search).get("api")) || window.ATHENA_API || "";
+const AGENTS=["planner","researcher","analyst","critic","writer"];
+const AGENT_LABEL={planner:"Planner",researcher:"Researcher",analyst:"Analyst",critic:"Critic",writer:"Writer"};
+const AGENT_ICON={planner:"P",researcher:"R",analyst:"A",critic:"C",writer:"W"};
+health();
+
+// lanes init
+function initLanes(){
+  const box=document.getElementById("lanes"); box.innerHTML="";
+  AGENTS.forEach(a=>{
+    const d=document.createElement("div"); d.className="lane"; d.dataset.agent=a; d.id="lane-"+a;
+    d.innerHTML=`<div class="lane-head" onclick="toggleLane('${a}')"><div class="lane-icon">${AGENT_ICON[a]}</div><div class="lane-name">${AGENT_LABEL[a]}</div><div class="lane-state" id="state-${a}">等待</div></div><div class="lane-body" id="body-${a}"></div>`;
+    box.appendChild(d);
+  });
+}
+initLanes();
+function toggleLane(a){ document.getElementById("lane-"+a).classList.toggle("open"); }
+function setLane(a,state,html){
+  const lane=document.getElementById("lane-"+a);
+  lane.classList.remove("active","done","fail");
+  const st=document.getElementById("state-"+a);
+  if(state==="active"){ lane.classList.add("active","open"); st.textContent="运行中"; }
+  if(state==="done"){ lane.classList.add("done"); st.textContent="完成"; }
+  if(state==="fail"){ lane.classList.add("fail"); st.textContent="打回"; }
+  if(html) document.getElementById("body-"+a).insertAdjacentHTML("beforeend",html);
+}
+
+async function health(){
+  try{
+    const j=await (await fetch(API+"/health")).json();
+    document.getElementById("health").textContent=(j.mock_mode?"演示模式":"模型 "+j.model)+" · 迭代 "+j.max_iterations;
+    document.getElementById("statusDot").className="dot"+(j.mock_mode?" mock":"");
+    document.getElementById("modeHint").textContent=j.mock_mode?"演示模式：返回内置应答":"真实模型："+j.model;
+  }catch(e){
+    document.getElementById("health").textContent="⚠ 未连接";
+    document.getElementById("statusDot").className="dot";
+  }
+}
+
+// artifact rendering
+function fmtMd(text){
+  if(!text) return "";
+  return text
+    .replace(/^### (.*$)/gim,"<h3>$1</h3>")
+    .replace(/^## (.*$)/gim,"<h2>$1</h2>")
+    .replace(/^# (.*$)/gim,"<h1>$1</h1>")
+    .replace(/\*\*(.*?)\*\*/g,"<strong>$1</strong>")
+    .replace(/`([^`]+)`/g,"<code>$1</code>")
+    .replace(/^\> (.*$)/gim,"<blockquote>$1</blockquote>")
+    .replace(/^\- (.*$)/gim,"<li>$1</li>")
+    .replace(/(<li>.*<\/li>)/s,"<ul>$1</ul>")
+    .replace(/\n/g,"<br>");
+}
+function esc(s){return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+
+let currentReport="";
+function renderThinking(msg){
+  document.getElementById("artifactBox").innerHTML=`<div class="thinking-card"><div class="thinking-header">🧠 ${esc(msg)}</div><div id="thinkingList"></div></div>`;
+}
+function addThinkingPoint(txt){
+  const list=document.getElementById("thinkingList"); if(!list) return;
+  const li=document.createElement("li"); li.textContent=txt; list.appendChild(li);
+}
+function renderPlan(plan){
+  const items=(plan||[]).map((p,i)=>`<div class="plan-item"><div class="plan-num">${i+1}</div><div><h4>${esc(p.title)}</h4><p>${esc(p.purpose)}</p></div></div>`).join("");
+  document.getElementById("artifactBox").innerHTML=`<div class="artifact"><div class="artifact-title">📋 执行计划</div><div class="plan-list">${items||'<div class="muted">无计划</div>'}</div></div>`;
+}
+function renderSearch(hits){
+  const cards=(hits||[]).map(h=>`<div class="search-card"><h4>${esc(h.metadata?.title||"来源")}</h4><div class="url">${esc(h.doc_id||"")}</div><p>${esc((h.text||"").slice(0,120))}…</p></div>`).join("");
+  document.getElementById("artifactBox").innerHTML=`<div class="artifact"><div class="artifact-title">🔍 检索结果</div><div class="search-grid">${cards||'<div class="muted">无结果</div>'}</div></div>`;
+}
+function renderAnalysis(text){
+  document.getElementById("artifactBox").innerHTML=`<div class="artifact"><div class="artifact-title">📊 综合分析</div><div class="analysis-body">${fmtMd(text)}</div></div>`;
+}
+function renderCritic(score,passed,feedback){
+  document.getElementById("artifactBox").innerHTML=`<div class="artifact"><div class="artifact-title">✅ 质量评审</div><div class="critic-score"><div class="score-box"><div class="n">${score}</div><div class="l">评分</div></div></div><div class="critic-verdict ${passed?'pass':'fail'}">${passed?'通过':'打回重试'}</div><div class="analysis-body">${esc(feedback||"")}</div></div>`;
+}
+function renderReport(md){
+  currentReport=md;
+  document.getElementById("artifactBox").innerHTML=`<div class="artifact"><div class="artifact-title">📝 研究报告</div><div class="report-body">${fmtMd(md)}</div></div>`;
+}
+function renderTool(kind,args,result){
+  document.getElementById("artifactBox").innerHTML=`<div class="artifact"><div class="artifact-title">🔧 工具调用 · ${esc(kind)}</div><div class="tool-call"><span class="kind">${esc(kind)}</span><pre>${esc(JSON.stringify(args||{},null,2))}</pre></div><div class="tool-call"><span class="kind">result</span><pre>${esc(JSON.stringify(result||{},null,2))}</pre></div></div>`;
+}
+
+// trace
+const traceLines=[];
+function addTrace(ev,data){
+  const t=new Date().toLocaleTimeString("zh-CN",{hour12:false});
+  const ag=data.agent?`<span class="trace-ag">${data.agent}</span>`:"";
+  traceLines.push(`<div class="trace-line"><span class="trace-time">${t}</span><span class="trace-ev">${ev}</span>${ag}</div>`);
+  document.getElementById("inspectorTrace").innerHTML=traceLines.slice(-80).join("");
+}
+
+// run
+async function run(){
+  const q=document.getElementById("q").value.trim(); if(!q) return;
+  initLanes(); traceLines.length=0; document.getElementById("inspectorTrace").innerHTML="";
+  renderThinking("正在理解问题并制定计划…");
+  const btn=document.getElementById("runBtn"); btn.disabled=true;
+  document.getElementById("statusDot").classList.add("busy");
+  startQueuePolling();
+  try{
+    const resp=await fetch(API+"/api/research/stream",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({question:q})});
+    if(!resp.ok) throw new Error("HTTP "+resp.status);
+    const reader=resp.body.getReader(), dec=new TextDecoder(); let buf="";
+    while(true){
+      const {done,value}=await reader.read(); if(done) break;
+      buf+=dec.decode(value,{stream:true});
+      let idx;
+      while((idx=buf.indexOf("\n\n"))!==-1){
+        const raw=buf.slice(0,idx); buf=buf.slice(idx+2);
+        let ev="message",data=null;
+        for(const line of raw.split("\n")){
+          if(line.startsWith("event:")) ev=line.slice(6).trim();
+          if(line.startsWith("data:")) try{data=JSON.parse(line.slice(5).trim())}catch(e){}
+        }
+        if(!data) continue;
+        addTrace(ev,data);
+        if(ev==="agent_start"){ setLane(data.agent,"active"); document.getElementById("canvasTitle").textContent=`🎨 ${AGENT_LABEL[data.agent]} 正在工作`; }
+        if(ev==="agent_end"){
+          setLane(data.agent,data.passed===false?"fail":"done");
+          if(data.agent==="planner") renderPlan(data.plan);
+          if(data.agent==="researcher") renderSearch(data.hits);
+          if(data.agent==="analyst") renderAnalysis(data.analysis);
+          if(data.agent==="critic") renderCritic(data.score,data.passed,data.feedback);
+        }
+        if(ev==="tool"){ setLane(data.agent,"active"); renderTool(data.kind,data.args,data.result); }
+        if(ev==="final"){ renderReport(data.report); document.getElementById("canvasTitle").textContent="🎨 研究报告"; }
+      }
+    }
+    loadObs(); loadHistory();
+  }catch(e){
+    document.getElementById("artifactBox").innerHTML=`<div class="artifact"><div class="artifact-title">❌ 运行失败</div><div class="analysis-body">${esc(e.message)}</div></div>`;
+  }finally{
+    btn.disabled=false; document.getElementById("statusDot").classList.remove("busy");
+  }
+}
+
+function copyReport(){ navigator.clipboard.writeText(currentReport).then(()=>toast("报告已复制")); }
+function downloadReport(){
+  const blob=new Blob([currentReport],{type:"text/markdown"});
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download="athena-report.md"; a.click();
+  toast("报告已下载");
+}
+function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg; t.classList.add("show"); setTimeout(()=>t.classList.remove("show"),2000); }
+
+// inspector tabs
+function setInspector(name){
+  document.querySelectorAll(".inspector-tab").forEach(b=>b.classList.toggle("active",b.textContent===(name==="obs"?"可观测":"Trace")));
+  document.getElementById("inspectorObs").style.display=name==="obs"?"block":"none";
+  document.getElementById("inspectorTrace").style.display=name==="trace"?"block":"none";
+}
+
+// queue polling
+let queueTimer=null;
+async function refreshQueue(){
+  const pill=document.getElementById("queuePill");
+  try{
+    const q=await (await fetch(API+"/api/research/queue")).json();
+    const r=q.running||[], w=q.waiting||[];
+    if(!r.length && !w.length){ pill.style.display="none"; return; }
+    pill.style.display="inline-flex"; document.getElementById("runCount").textContent=r.length; document.getElementById("waitCount").textContent=w.length;
+  }catch(e){ pill.style.display="none"; }
+}
+function startQueuePolling(){ refreshQueue(); if(!queueTimer) queueTimer=setInterval(refreshQueue,2000); }
+
+// obs
+async function loadObs(){
+  try{
+    const o=await (await fetch(API+"/api/obs/summary")).json();
+    document.getElementById("kpiCalls").textContent=o.llm_calls;
+    document.getElementById("kpiTools").textContent=o.tool_calls||0;
+    document.getElementById("kpiCost").textContent="¥"+(o.total_cost||0).toFixed(4);
+    document.getElementById("kpiTokens").textContent=o.total_tokens||0;
+    document.getElementById("totalCost").textContent="¥"+(o.total_cost||0).toFixed(4);
+    const pa=o.per_agent||{}, maxLat=Math.max(0,...Object.values(pa).map(v=>v.latency||0))||1;
+    document.getElementById("latencyBars").innerHTML=Object.entries(pa).sort((a,b)=>(b[1].latency||0)-(a[1].latency||0)).map(([k,v])=>{
+      const pct=(v.latency||0)/maxLat*100, pctT=(v.latency||0)/((o.total_latency_ms||0)||1)*100;
+      return `<div class="latency-row"><span class="latency-name">${k}</span><div class="latency-bar"><i style="width:${pct.toFixed(1)}%"></i></div><span class="latency-val">${(v.latency||0).toFixed(0)}ms</span></div>`;
+    }).join("")||'<div class="muted">暂无数据</div>';
+    document.getElementById("toolChain").innerHTML=(o.tools||[]).map(t=>`<div class="tool-call"><span class="kind">${esc(t.kind)}</span><div style="display:flex;justify-content:space-between;color:var(--muted);font-size:11px"><span>${esc(t.agent)}</span><span>${(t.latency_ms||0).toFixed(0)}ms</span></div></div>`).join("")||'<div class="muted">暂无 MCP 工具调用</div>';
+  }catch(e){}
+}
+
+// history
+async function loadHistory(){
+  const box=document.getElementById("historyList");
+  try{
+    const {tasks}=await (await fetch(API+"/api/research/tasks?limit=20")).json();
+    if(!tasks.length){ box.innerHTML='<div class="muted">暂无历史任务</div>'; return; }
+    box.innerHTML=tasks.map(t=>`<div class="history-item" onclick="viewTask('${t.task_id}')"><div class="q">${esc(t.question)}</div><div class="meta">iter ${t.iteration} · ${t.mock_mode==='False'||t.mock_mode==='false'?'真实':'演示'} · ${fmtDate(t.created_at)}</div></div>`).join("");
+  }catch(e){ box.innerHTML=`<div class="muted">加载失败</div>`; }
+}
+function toggleHistory(){ const o=document.getElementById("historyOverlay"); o.style.display=o.style.display==="none"?"block":"none"; if(o.style.display==="block") loadHistory(); }
+function fmtDate(iso){ if(!iso)return"—"; try{const d=new Date(iso); return d.toLocaleString("zh-CN",{month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"})}catch(e){return"—";}}
+async function viewTask(id){
+  try{
+    const t=await (await fetch(API+"/api/research/tasks/"+encodeURIComponent(id))).json();
+    document.getElementById("q").value=t.question; renderReport(t.report||""); toggleHistory();
+    initLanes(); setLane("writer","done");
+  }catch(e){ toast("加载历史失败"); }
+}
+
+window.addEventListener("load",()=>{ loadHistory(); loadObs(); });
+window.addEventListener("click",e=>{ const o=document.getElementById("historyOverlay"); if(!o.contains(e.target) && !e.target.closest(".icon-btn")) o.style.display="none"; });
+</script>
+</body>
+</html>
