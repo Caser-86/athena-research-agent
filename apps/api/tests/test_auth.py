@@ -65,6 +65,25 @@ def test_valid_bearer_key_200(protected_client):
     assert r.status_code == 200
 
 
+def test_api_key_uses_constant_time_comparison(monkeypatch):
+    from app import auth
+
+    monkeypatch.setenv("ATHENA_API_KEY", "test-secret-key")
+    get_settings.cache_clear()
+    calls = []
+
+    def compare_digest(left, right):
+        calls.append((left, right))
+        return left == right
+
+    monkeypatch.setattr(auth.secrets, "compare_digest", compare_digest)
+    try:
+        auth._verify("test-secret-key")
+        assert calls == [("test-secret-key", "test-secret-key")]
+    finally:
+        get_settings.cache_clear()
+
+
 def test_valid_x_api_key_200(protected_client):
     r = protected_client.get("/api/obs/summary", headers={"X-API-Key": "test-secret-key"})
     assert r.status_code == 200
@@ -88,3 +107,92 @@ def test_cors_whitelist_allows_known_origin(protected_client):
         headers={"Origin": "http://localhost:8080", "Access-Control-Request-Method": "GET"},
     )
     assert "localhost:8080" in r.headers.get("access-control-allow-origin", "")
+
+
+def test_task_list_rejects_non_positive_limit(open_client):
+    r = open_client.get("/api/research/tasks?limit=0")
+    assert r.status_code == 422
+
+
+def test_stream_does_not_expose_internal_exception(monkeypatch):
+    from app.api import routes as research_routes
+    from app.main import app
+
+    async def fail_graph(*_args, **_kwargs):
+        raise RuntimeError("postgres://user:secret@internal.example/db")
+
+    monkeypatch.setattr(research_routes, "_run_graph", fail_graph)
+    response = TestClient(app).post("/api/research/stream", json={"question": "测试"})
+
+    assert response.status_code == 200
+    assert "研究任务执行失败" in response.text
+    assert "postgres://" not in response.text
+    assert "secret" not in response.text
+
+
+def test_production_disables_debug_docs_and_requires_cors(monkeypatch):
+    monkeypatch.setenv("ATHENA_ENVIRONMENT", "production")
+    monkeypatch.setenv("ATHENA_API_KEY", "production-key")
+    monkeypatch.setenv("ATHENA_CORS_ALLOWED_ORIGINS", "https://app.example.com")
+    monkeypatch.setenv("ATHENA_ALLOWED_HOSTS", "app.example.com")
+    get_settings.cache_clear()
+    try:
+        app = create_app()
+        client = TestClient(app)
+        headers = {"Host": "app.example.com"}
+        assert client.get("/docs", headers=headers).status_code == 404
+        assert client.get("/openapi.json", headers=headers).status_code == 404
+    finally:
+        get_settings.cache_clear()
+
+
+def test_production_without_cors_allowlist_fails_fast(monkeypatch):
+    monkeypatch.setenv("ATHENA_ENVIRONMENT", "production")
+    monkeypatch.setenv("ATHENA_API_KEY", "production-key")
+    monkeypatch.delenv("ATHENA_CORS_ALLOWED_ORIGINS", raising=False)
+    monkeypatch.setenv("ATHENA_ALLOWED_HOSTS", "app.example.com")
+    get_settings.cache_clear()
+    try:
+        with pytest.raises(RuntimeError, match="CORS"):
+            create_app()
+    finally:
+        get_settings.cache_clear()
+
+
+def test_production_without_api_key_fails_fast(monkeypatch):
+    monkeypatch.setenv("ATHENA_ENVIRONMENT", "production")
+    monkeypatch.delenv("ATHENA_API_KEY", raising=False)
+    monkeypatch.setenv("ATHENA_CORS_ALLOWED_ORIGINS", "https://app.example.com")
+    monkeypatch.setenv("ATHENA_ALLOWED_HOSTS", "app.example.com")
+    get_settings.cache_clear()
+    try:
+        with pytest.raises(RuntimeError, match="API_KEY"):
+            create_app()
+    finally:
+        get_settings.cache_clear()
+
+
+def test_production_without_allowed_hosts_fails_fast(monkeypatch):
+    monkeypatch.setenv("ATHENA_ENVIRONMENT", "production")
+    monkeypatch.setenv("ATHENA_API_KEY", "production-key")
+    monkeypatch.setenv("ATHENA_CORS_ALLOWED_ORIGINS", "https://app.example.com")
+    monkeypatch.delenv("ATHENA_ALLOWED_HOSTS", raising=False)
+    get_settings.cache_clear()
+    try:
+        with pytest.raises(RuntimeError, match="ALLOWED_HOSTS"):
+            create_app()
+    finally:
+        get_settings.cache_clear()
+
+
+def test_production_rejects_untrusted_host(monkeypatch):
+    monkeypatch.setenv("ATHENA_ENVIRONMENT", "production")
+    monkeypatch.setenv("ATHENA_API_KEY", "production-key")
+    monkeypatch.setenv("ATHENA_CORS_ALLOWED_ORIGINS", "https://app.example.com")
+    monkeypatch.setenv("ATHENA_ALLOWED_HOSTS", "app.example.com")
+    get_settings.cache_clear()
+    try:
+        client = TestClient(create_app())
+        assert client.get("/health", headers={"Host": "evil.example.com"}).status_code == 400
+    finally:
+        get_settings.cache_clear()

@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#090b10">
 <title>Athena · 多智能体研究平台</title>
 <style>
   :root{
@@ -30,6 +31,7 @@
     --shadow-sm:0 2px 10px rgba(0,0,0,.25);
   }
   *{box-sizing:border-box}
+  .is-hidden{display:none!important}
   body{margin:0;background:var(--bg);color:var(--text);font:14px/1.6 -apple-system,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;overflow:hidden;height:100vh}
 
   /* header */
@@ -53,7 +55,7 @@
   .lane-header{padding:14px 16px 10px;font-size:12px;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.6px}
   #lanes{flex:1;overflow:auto;padding:0 12px 14px}
   .lane{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-xs);margin-bottom:10px;overflow:hidden}
-  .lane-head{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--surface2);cursor:pointer;transition:.15s}
+  .lane-head{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--surface2);cursor:pointer;transition:background-color .15s;border:0;color:inherit;width:100%;text-align:left;font:inherit}
   .lane-head:hover{background:var(--surface3)}
   .lane-icon{width:22px;height:22px;border-radius:6px;display:grid;place-items:center;font-size:10px;font-weight:700;background:var(--surface3);color:var(--text-secondary)}
   .lane-name{flex:1;font-size:12px;font-weight:600;color:var(--text-secondary)}
@@ -74,7 +76,7 @@
   .canvas-header{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--bg-elevated)}
   .canvas-title{font-size:13px;font-weight:700;display:flex;align-items:center;gap:8px}
   .canvas-actions{display:flex;gap:6px}
-  .icon-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text-secondary);border-radius:8px;padding:5px 10px;cursor:pointer;font-size:12px;transition:.15s}
+  .icon-btn{background:var(--surface2);border:1px solid var(--border);color:var(--text-secondary);border-radius:8px;padding:5px 10px;cursor:pointer;font-size:12px;transition:background-color .15s,color .15s}
   .icon-btn:hover{background:var(--surface3);color:var(--text)}
   #artifactBox{flex:1;overflow:auto;padding:24px 28px}
 
@@ -95,7 +97,7 @@
   .plan-item p{margin:0;font-size:12px;color:var(--muted)}
 
   .search-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px}
-  .search-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-xs);padding:14px;transition:.15s}
+  .search-card{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius-xs);padding:14px;transition:border-color .15s}
   .search-card:hover{border-color:var(--border-light)}
   .search-card h4{margin:0 0 6px;font-size:13px;color:#cfe0ff}
   .search-card .url{font-size:10px;color:var(--muted);margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -141,7 +143,9 @@
   .latency-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11px}
   .latency-name{width:60px;color:var(--text-secondary);font-weight:600}
   .latency-bar{flex:1;height:8px;background:var(--surface2);border-radius:4px;overflow:hidden}
-  .latency-bar>i{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+  .latency-bar>i{display:block;width:0;height:100%;border-radius:4px;background:linear-gradient(90deg,var(--accent),var(--accent2))}
+  .latency-bar>i.width-0{width:0%}.latency-bar>i.width-10{width:10%}.latency-bar>i.width-20{width:20%}.latency-bar>i.width-30{width:30%}.latency-bar>i.width-40{width:40%}.latency-bar>i.width-50{width:50%}.latency-bar>i.width-60{width:60%}.latency-bar>i.width-70{width:70%}.latency-bar>i.width-80{width:80%}.latency-bar>i.width-90{width:90%}.latency-bar>i.width-100{width:100%}
+  .tool-meta{display:flex;justify-content:space-between;color:var(--muted);font-size:11px}
   .latency-val{width:85px;text-align:right;color:var(--muted);font-family:var(--mono)}
 
   /* hero input (核心位置) */
@@ -151,22 +155,22 @@
   .hero-mark{width:52px;height:52px;margin:0 auto 14px;border-radius:16px;display:grid;place-items:center;font-weight:800;font-size:22px;color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));box-shadow:0 10px 30px rgba(92,141,255,.35)}
   .hero-title{font-size:26px;font-weight:800;letter-spacing:.5px;margin-bottom:6px}
   .hero-sub{font-size:13px;color:var(--text-secondary);margin-bottom:22px}
-  .hero-input-wrap{display:flex;gap:10px;align-items:flex-end;background:var(--bg-elevated);border:1px solid var(--border-light);border-radius:22px;padding:14px 16px;box-shadow:0 14px 50px rgba(0,0,0,.5);transition:.2s}
+  .hero-input-wrap{display:flex;gap:10px;align-items:flex-end;background:var(--bg-elevated);border:1px solid var(--border-light);border-radius:22px;padding:14px 16px;box-shadow:0 14px 50px rgba(0,0,0,.5);transition:border-color .2s,box-shadow .2s}
   .hero-input-wrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 4px rgba(92,141,255,.14),0 14px 50px rgba(0,0,0,.5)}
   .hero-input-wrap textarea#q{flex:1;background:transparent;border:none;color:var(--text);font-size:16px;resize:none;outline:none;min-height:26px;max-height:140px;font-family:inherit;line-height:1.5}
   .hero-input-wrap textarea#q::placeholder{color:var(--muted)}
-  .send-btn{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#fff;display:grid;place-items:center;cursor:pointer;transition:.15s;box-shadow:0 4px 12px rgba(92,141,255,.35);flex-shrink:0}
+  .send-btn{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--accent),var(--accent2));border:none;color:#fff;display:grid;place-items:center;cursor:pointer;transition:transform .15s,box-shadow .15s;box-shadow:0 4px 12px rgba(92,141,255,.35);flex-shrink:0}
   .send-btn:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(92,141,255,.45)}
   .send-btn:disabled{opacity:.5;cursor:not-allowed;transform:none}
   .input-hints{display:flex;gap:16px;justify-content:center;margin-top:10px;font-size:11px;color:var(--muted)}
   .example-chips{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:18px;align-items:center}
   .chip-label{font-size:12px;color:var(--muted);margin-right:2px}
-  .chip{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:7px 14px;color:var(--text-secondary);font-size:12px;cursor:pointer;transition:.15s}
+  .chip{background:var(--surface2);border:1px solid var(--border);border-radius:20px;padding:7px 14px;color:var(--text-secondary);font-size:12px;cursor:pointer;transition:border-color .15s,color .15s,background-color .15s}
   .chip:hover{border-color:var(--accent);color:var(--text);background:var(--surface3)}
 
   /* work bar (运行/结果态顶部输入) */
   .work-bar{padding:12px 18px;background:var(--bg-elevated);border-bottom:1px solid var(--border);flex-shrink:0}
-  .work-bar .input-wrap{display:flex;gap:10px;align-items:flex-end;background:var(--surface);border:1px solid var(--border-light);border-radius:var(--radius-sm);padding:9px 12px;box-shadow:var(--shadow-sm);transition:.2s}
+  .work-bar .input-wrap{display:flex;gap:10px;align-items:flex-end;background:var(--surface);border:1px solid var(--border-light);border-radius:var(--radius-sm);padding:9px 12px;box-shadow:var(--shadow-sm);transition:border-color .2s,box-shadow .2s}
   .work-bar .input-wrap:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px rgba(92,141,255,.12)}
   .work-bar textarea#q2{flex:1;background:transparent;border:none;color:var(--text);font-size:14px;resize:none;outline:none;min-height:22px;max-height:100px;font-family:inherit;line-height:1.5}
   .work-bar textarea#q2::placeholder{color:var(--muted)}
@@ -178,10 +182,14 @@
   .trace-ag{color:var(--accent3)}
 
   /* history */
-  .history-item{padding:10px;border-radius:8px;cursor:pointer;border:1px solid transparent;margin-bottom:6px;background:var(--surface);transition:.15s}
+  .history-item{display:block;width:100%;padding:10px;border-radius:8px;cursor:pointer;border:1px solid transparent;margin-bottom:6px;background:var(--surface);transition:border-color .15s;text-align:left;color:inherit;font:inherit}
   .history-item:hover{border-color:var(--border-light)}
   .history-item .q{font-weight:600;font-size:12px;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .history-item .meta{font-size:11px;color:var(--muted);margin-top:4px}
+  .history-overlay{display:none;position:fixed;right:20px;top:72px;width:360px;max-height:60vh;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow);z-index:90;overflow:auto;padding:14px}
+  .history-overlay.is-open{display:block}
+  .history-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .history-title{font-size:13px;font-weight:700}
 
   /* tabs */
   .full-panel{flex:1;padding:24px;overflow:auto;display:none}
@@ -191,13 +199,19 @@
   .top-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 
   /* toast */
-  #toast{position:fixed;right:20px;bottom:90px;background:var(--surface3);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:12px 18px;box-shadow:var(--shadow);opacity:0;transform:translateY(10px);transition:.2s;pointer-events:none;z-index:100;font-size:13px}
+  #toast{position:fixed;right:20px;bottom:90px;background:var(--surface3);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:12px 18px;box-shadow:var(--shadow);opacity:0;transform:translateY(10px);transition:opacity .2s,transform .2s;pointer-events:none;z-index:100;font-size:13px}
   #toast.show{opacity:1;transform:translateY(0)}
 
   /* animations */
   @keyframes pulse{0%{opacity:.4}50%{opacity:1}100%{opacity:.4}}
   .skeleton{height:12px;background:linear-gradient(90deg,var(--surface2),var(--surface3),var(--surface2));background-size:200% 100%;animation:sweep 1.5s infinite;border-radius:4px;margin-bottom:8px}
   @keyframes sweep{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+  .hero-input-wrap textarea:focus-visible,.work-bar textarea:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  button,.chip{touch-action:manipulation}
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}
+  }
 
   @media(max-width:1024px){
     .inspector{display:none}
@@ -213,7 +227,7 @@
   </div>
   <div class="global-status">
     <span class="pill"><span class="dot" id="statusDot"></span><span id="health">连接中…</span></span>
-    <span class="pill" id="queuePill" style="display:none">队列：运行 <b id="runCount">0</b> · 等待 <b id="waitCount">0</b></span>
+    <span class="pill is-hidden" id="queuePill">队列：运行 <b id="runCount">0</b> · 等待 <b id="waitCount">0</b></span>
     <span class="pill">累计成本 <b id="totalCost">¥0.0000</b></span>
   </div>
 </header>
@@ -232,10 +246,10 @@
         <div class="canvas-header">
           <div class="canvas-title" id="canvasTitle">🎨 Artifact 画布</div>
           <div class="canvas-actions">
-            <button class="icon-btn" onclick="goHome()">🏠 首页</button>
-            <button class="icon-btn" onclick="copyReport()">复制</button>
-            <button class="icon-btn" onclick="downloadReport()">下载</button>
-            <button class="icon-btn" onclick="toggleHistory()">历史</button>
+            <button class="icon-btn" id="homeBtn">🏠 首页</button>
+            <button class="icon-btn" id="copyBtn">复制</button>
+            <button class="icon-btn" id="downloadBtn">下载</button>
+            <button class="icon-btn" id="historyBtn">历史</button>
           </div>
         </div>
 
@@ -246,24 +260,24 @@
             <div class="hero-title">研究任何问题</div>
             <div class="hero-sub">五个专业智能体协作 · RAG 检索 + MCP 工具 · 带引用出报告</div>
             <div class="hero-input-wrap">
-              <textarea id="q" rows="1" placeholder="输入研究问题，例如：对比比亚迪、蔚来、理想 2024 年报的核心财务指标与差异化战略…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();run()}"></textarea>
-              <button class="send-btn" id="runBtn" onclick="run()"><svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+              <textarea id="q" name="question" autocomplete="off" aria-label="研究问题" rows="1" placeholder="输入研究问题，例如：对比比亚迪、蔚来、理想 2024 年报的核心财务指标与差异化战略…"></textarea>
+              <button type="button" class="send-btn" id="runBtn" aria-label="运行研究"><svg aria-hidden="true" width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
             </div>
             <div class="input-hints"><span>↵ 发送</span><span>Shift + ↵ 换行</span><span id="modeHint">—</span></div>
             <div class="example-chips">
               <span class="chip-label">试试：</span>
-              <button class="chip" onclick="useExample(0)">对比比亚迪、蔚来、理想 2024 年报</button>
-              <button class="chip" onclick="useExample(1)">小米 SU7 的竞争格局与销量复盘</button>
-              <button class="chip" onclick="useExample(2)">国产大模型商业化路径分析</button>
+              <button class="chip" data-example="0">对比比亚迪、蔚来、理想 2024 年报</button>
+              <button class="chip" data-example="1">小米 SU7 的竞争格局与销量复盘</button>
+              <button class="chip" data-example="2">国产大模型商业化路径分析</button>
             </div>
           </div>
         </div>
 
         <!-- work bar：运行/结果态顶部输入 -->
-        <div class="work-bar" id="workBar" style="display:none">
+        <div class="work-bar is-hidden" id="workBar">
           <div class="input-wrap">
-            <textarea id="q2" rows="1" placeholder="换个问题继续研究…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();run()}"></textarea>
-            <button class="send-btn" id="runBtn2" onclick="run()"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
+            <textarea id="q2" name="question-continued" autocomplete="off" aria-label="继续研究的问题" rows="1" placeholder="换个问题继续研究…"></textarea>
+            <button type="button" class="send-btn" id="runBtn2" aria-label="运行后续研究"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg></button>
           </div>
         </div>
 
@@ -282,8 +296,8 @@
       <!-- inspector -->
       <div class="inspector">
         <div class="inspector-tabs">
-          <button class="inspector-tab active" onclick="setInspector('obs')">可观测</button>
-          <button class="inspector-tab" onclick="setInspector('trace')">Trace</button>
+          <button type="button" class="inspector-tab active" data-inspector="obs" aria-selected="true" aria-controls="inspectorObs">可观测</button>
+          <button type="button" class="inspector-tab" data-inspector="trace" aria-selected="false" aria-controls="inspectorTrace">Trace</button>
         </div>
         <div class="inspector-body" id="inspectorObs">
           <div class="kpi-grid">
@@ -297,25 +311,26 @@
           <div class="section-title">MCP 工具链</div>
           <div id="toolChain"></div>
         </div>
-        <div class="inspector-body" id="inspectorTrace" style="display:none"></div>
+        <div class="inspector-body is-hidden" id="inspectorTrace"></div>
       </div>
     </div>
   </div>
 </div>
 
 <!-- history overlay -->
-<div id="historyOverlay" style="display:none;position:fixed;right:20px;top:72px;width:360px;max-height:60vh;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);box-shadow:var(--shadow);z-index:90;overflow:auto;padding:14px">
-  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-    <span style="font-size:13px;font-weight:700">历史任务</span>
-    <button class="icon-btn" onclick="loadHistory()">刷新</button>
+<div id="historyOverlay" class="history-overlay">
+  <div class="history-header">
+    <span class="history-title">历史任务</span>
+    <button class="icon-btn" id="historyRefresh">刷新</button>
   </div>
   <div id="historyList"><div class="muted">暂无历史任务</div></div>
 </div>
 
-<div id="toast"></div>
+<div id="toast" role="status" aria-live="polite"></div>
 
 <script>
-const API = (new URLSearchParams(location.search).get("api")) || window.ATHENA_API || "";
+// API 地址由同源 Nginx 提供；不从 URL 读取可覆盖值，避免把请求导向不受信任的端点。
+const API = window.ATHENA_API_BASE || "";
 const AGENTS=["planner","researcher","analyst","critic","writer"];
 const AGENT_LABEL={planner:"Planner",researcher:"Researcher",analyst:"Analyst",critic:"Critic",writer:"Writer"};
 const AGENT_ICON={planner:"P",researcher:"R",analyst:"A",critic:"C",writer:"W"};
@@ -326,20 +341,21 @@ function initLanes(){
   const box=document.getElementById("lanes"); box.innerHTML="";
   AGENTS.forEach(a=>{
     const d=document.createElement("div"); d.className="lane"; d.dataset.agent=a; d.id="lane-"+a;
-    d.innerHTML=`<div class="lane-head" onclick="toggleLane('${a}')"><div class="lane-icon">${AGENT_ICON[a]}</div><div class="lane-name">${AGENT_LABEL[a]}</div><div class="lane-state" id="state-${a}">等待</div></div><div class="lane-body" id="body-${a}"></div>`;
+    d.innerHTML=`<button type="button" class="lane-head" aria-expanded="false" aria-controls="body-${a}"><span class="lane-icon" aria-hidden="true">${AGENT_ICON[a]}</span><span class="lane-name">${AGENT_LABEL[a]}</span><span class="lane-state" id="state-${a}">等待</span></button><div class="lane-body" id="body-${a}"></div>`;
+    d.querySelector(".lane-head").addEventListener("click",()=>toggleLane(a));
     box.appendChild(d);
   });
 }
 initLanes();
-function toggleLane(a){ document.getElementById("lane-"+a).classList.toggle("open"); }
-function setLane(a,state,html){
+function toggleLane(a){ const lane=document.getElementById("lane-"+a); const head=lane.querySelector(".lane-head"); const open=lane.classList.toggle("open"); head.setAttribute("aria-expanded",String(open)); }
+function setLane(a,state){
+  if(!AGENTS.includes(a)) return;
   const lane=document.getElementById("lane-"+a);
   lane.classList.remove("active","done","fail");
   const st=document.getElementById("state-"+a);
-  if(state==="active"){ lane.classList.add("active","open"); st.textContent="运行中"; }
+  if(state==="active"){ lane.classList.add("active","open"); st.textContent="运行中"; lane.querySelector(".lane-head").setAttribute("aria-expanded","true"); }
   if(state==="done"){ lane.classList.add("done"); st.textContent="完成"; }
   if(state==="fail"){ lane.classList.add("fail"); st.textContent="打回"; }
-  if(html) document.getElementById("body-"+a).insertAdjacentHTML("beforeend",html);
 }
 
 async function health(){
@@ -357,7 +373,8 @@ async function health(){
 // artifact rendering
 function fmtMd(text){
   if(!text) return "";
-  return text
+  const safe=esc(String(text));
+  return safe
     .replace(/^### (.*$)/gim,"<h3>$1</h3>")
     .replace(/^## (.*$)/gim,"<h2>$1</h2>")
     .replace(/^# (.*$)/gim,"<h1>$1</h1>")
@@ -368,7 +385,7 @@ function fmtMd(text){
     .replace(/(<li>.*<\/li>)/s,"<ul>$1</ul>")
     .replace(/\n/g,"<br>");
 }
-function esc(s){return (s||"").replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));}
 
 let currentReport="";
 function renderThinking(msg){
@@ -382,8 +399,11 @@ function renderPlan(plan){
   const items=(plan||[]).map((p,i)=>`<div class="plan-item"><div class="plan-num">${i+1}</div><div><h4>${esc(p.title)}</h4><p>${esc(p.purpose)}</p></div></div>`).join("");
   document.getElementById("artifactBox").innerHTML=`<div class="artifact"><div class="artifact-title">📋 执行计划</div><div class="plan-list">${items||'<div class="muted">无计划</div>'}</div></div>`;
 }
-function renderSearch(hits){
-  const cards=(hits||[]).map(h=>`<div class="search-card"><h4>${esc(h.metadata?.title||"来源")}</h4><div class="url">${esc(h.doc_id||"")}</div><p>${esc((h.text||"").slice(0,120))}…</p></div>`).join("");
+function renderSearch(searchResults){
+  const hits=(searchResults||[]).flatMap(item=>(item.results||[]).map(result=>({
+    title:result.title||"来源", url:result.url||item.query||"", text:result.snippet||""
+  })));
+  const cards=hits.map(h=>`<div class="search-card"><h4>${esc(h.title)}</h4><div class="url">${esc(h.url)}</div><p>${esc(h.text.slice(0,120))}…</p></div>`).join("");
   document.getElementById("artifactBox").innerHTML=`<div class="artifact"><div class="artifact-title">🔍 检索结果</div><div class="search-grid">${cards||'<div class="muted">无结果</div>'}</div></div>`;
 }
 function renderAnalysis(text){
@@ -404,18 +424,18 @@ function renderTool(kind,args,result){
 const traceLines=[];
 function addTrace(ev,data){
   const t=new Date().toLocaleTimeString("zh-CN",{hour12:false});
-  const ag=data.agent?`<span class="trace-ag">${data.agent}</span>`:"";
-  traceLines.push(`<div class="trace-line"><span class="trace-time">${t}</span><span class="trace-ev">${ev}</span>${ag}</div>`);
+  const ag=data.agent?`<span class="trace-ag">${esc(data.agent)}</span>`:"";
+  traceLines.push(`<div class="trace-line"><span class="trace-time">${esc(t)}</span><span class="trace-ev">${esc(ev)}</span>${ag}</div>`);
   document.getElementById("inspectorTrace").innerHTML=traceLines.slice(-80).join("");
 }
 
 // run
-function getQ(){ const hero=document.getElementById("heroArea"); return (hero && hero.style.display!=="none" ? document.getElementById("q") : document.getElementById("q2")).value.trim(); }
+function getQ(){ const hero=document.getElementById("heroArea"); return (hero && !hero.classList.contains("is-hidden") ? document.getElementById("q") : document.getElementById("q2")).value.trim(); }
 function setQ(v){ document.getElementById("q").value=v; document.getElementById("q2").value=v; }
 function setMode(mode){
   const hero=document.getElementById("heroArea"), work=document.getElementById("workBar"), box=document.getElementById("artifactBox");
-  if(mode==="hero"){ hero.style.display="grid"; work.style.display="none"; box.style.display="none"; setTimeout(()=>{const t=document.getElementById("q"); t.focus(); t.select();},50); }
-  else { hero.style.display="none"; work.style.display="block"; box.style.display="block"; }
+  if(mode==="hero"){ hero.classList.remove("is-hidden"); work.classList.add("is-hidden"); box.classList.add("is-hidden"); setTimeout(()=>{const t=document.getElementById("q"); t.focus(); t.select();},50); }
+  else { hero.classList.add("is-hidden"); work.classList.remove("is-hidden"); box.classList.remove("is-hidden"); }
 }
 function goHome(){
   setMode("hero"); setQ("");
@@ -460,11 +480,11 @@ async function run(){
         if(ev==="agent_end"){
           setLane(data.agent,data.passed===false?"fail":"done");
           if(data.agent==="planner") renderPlan(data.plan);
-          if(data.agent==="researcher") renderSearch(data.hits);
+          if(data.agent==="researcher") renderSearch(data.search_results);
           if(data.agent==="analyst") renderAnalysis(data.analysis);
           if(data.agent==="critic") renderCritic(data.score,data.passed,data.feedback);
         }
-        if(ev==="tool"){ setLane(data.agent,"active"); renderTool(data.kind,data.args,data.result); }
+        if(ev==="tool"){ setLane(data.agent,"active"); renderTool(data.kind,data.args||{query:data.query},data.result||{result_count:data.result_count}); }
         if(ev==="final"){ renderReport(data.report); document.getElementById("canvasTitle").textContent="🎨 研究报告"; }
       }
     }
@@ -486,9 +506,12 @@ function toast(msg){ const t=document.getElementById("toast"); t.textContent=msg
 
 // inspector tabs
 function setInspector(name){
-  document.querySelectorAll(".inspector-tab").forEach(b=>b.classList.toggle("active",b.textContent===(name==="obs"?"可观测":"Trace")));
-  document.getElementById("inspectorObs").style.display=name==="obs"?"block":"none";
-  document.getElementById("inspectorTrace").style.display=name==="trace"?"block":"none";
+  document.querySelectorAll(".inspector-tab").forEach(b=>{
+    const active=b.textContent===(name==="obs"?"可观测":"Trace");
+    b.classList.toggle("active",active); b.setAttribute("aria-selected",String(active));
+  });
+  document.getElementById("inspectorObs").classList.toggle("is-hidden",name!=="obs");
+  document.getElementById("inspectorTrace").classList.toggle("is-hidden",name!=="trace");
 }
 
 // queue polling
@@ -498,9 +521,9 @@ async function refreshQueue(){
   try{
     const q=await (await fetch(API+"/api/research/queue")).json();
     const r=q.running||[], w=q.waiting||[];
-    if(!r.length && !w.length){ pill.style.display="none"; return; }
-    pill.style.display="inline-flex"; document.getElementById("runCount").textContent=r.length; document.getElementById("waitCount").textContent=w.length;
-  }catch(e){ pill.style.display="none"; }
+    if(!r.length && !w.length){ pill.classList.add("is-hidden"); return; }
+    pill.classList.remove("is-hidden"); document.getElementById("runCount").textContent=r.length; document.getElementById("waitCount").textContent=w.length;
+  }catch(e){ pill.classList.add("is-hidden"); }
 }
 function startQueuePolling(){ refreshQueue(); if(!queueTimer) queueTimer=setInterval(refreshQueue,2000); }
 
@@ -515,10 +538,10 @@ async function loadObs(){
     document.getElementById("totalCost").textContent="¥"+(o.total_cost||0).toFixed(4);
     const pa=o.per_agent||{}, maxLat=Math.max(0,...Object.values(pa).map(v=>v.latency||0))||1;
     document.getElementById("latencyBars").innerHTML=Object.entries(pa).sort((a,b)=>(b[1].latency||0)-(a[1].latency||0)).map(([k,v])=>{
-      const pct=(v.latency||0)/maxLat*100, pctT=(v.latency||0)/((o.total_latency_ms||0)||1)*100;
-      return `<div class="latency-row"><span class="latency-name">${k}</span><div class="latency-bar"><i style="width:${pct.toFixed(1)}%"></i></div><span class="latency-val">${(v.latency||0).toFixed(0)}ms</span></div>`;
+      const pct=(v.latency||0)/maxLat*100, widthBucket=Math.max(0,Math.min(10,Math.round(pct/10)))*10;
+      return `<div class="latency-row"><span class="latency-name">${esc(k)}</span><div class="latency-bar"><i class="width-${widthBucket}"></i></div><span class="latency-val">${(v.latency||0).toFixed(0)}ms</span></div>`;
     }).join("")||'<div class="muted">暂无数据</div>';
-    document.getElementById("toolChain").innerHTML=(o.tools||[]).map(t=>`<div class="tool-call"><span class="kind">${esc(t.kind)}</span><div style="display:flex;justify-content:space-between;color:var(--muted);font-size:11px"><span>${esc(t.agent)}</span><span>${(t.latency_ms||0).toFixed(0)}ms</span></div></div>`).join("")||'<div class="muted">暂无 MCP 工具调用</div>';
+    document.getElementById("toolChain").innerHTML=(o.tools||[]).map(t=>`<div class="tool-call"><span class="kind">${esc(t.kind)}</span><div class="tool-meta"><span>${esc(t.agent)}</span><span>${(t.latency_ms||0).toFixed(0)}ms</span></div></div>`).join("")||'<div class="muted">暂无 MCP 工具调用</div>';
   }catch(e){}
 }
 
@@ -528,10 +551,16 @@ async function loadHistory(){
   try{
     const {tasks}=await (await fetch(API+"/api/research/tasks?limit=20")).json();
     if(!tasks.length){ box.innerHTML='<div class="muted">暂无历史任务</div>'; return; }
-    box.innerHTML=tasks.map(t=>`<div class="history-item" onclick="viewTask('${t.task_id}')"><div class="q">${esc(t.question)}</div><div class="meta">iter ${t.iteration} · ${t.mock_mode==='False'||t.mock_mode==='false'?'真实':'演示'} · ${fmtDate(t.created_at)}</div></div>`).join("");
+    box.innerHTML="";
+    tasks.forEach(t=>{
+      const item=document.createElement("button"); item.type="button"; item.className="history-item";
+      const question=document.createElement("div"); question.className="q"; question.textContent=t.question||"";
+      const meta=document.createElement("div"); meta.className="meta"; meta.textContent=`iter ${t.iteration} · ${t.mock_mode==='False'||t.mock_mode==='false'?'真实':'演示'} · ${fmtDate(t.created_at)}`;
+      item.append(question,meta); item.addEventListener("click",()=>viewTask(t.task_id)); box.appendChild(item);
+    });
   }catch(e){ box.innerHTML=`<div class="muted">加载失败</div>`; }
 }
-function toggleHistory(){ const o=document.getElementById("historyOverlay"); o.style.display=o.style.display==="none"?"block":"none"; if(o.style.display==="block") loadHistory(); }
+function toggleHistory(){ const o=document.getElementById("historyOverlay"); const open=o.classList.toggle("is-open"); if(open) loadHistory(); }
 function fmtDate(iso){ if(!iso)return"—"; try{const d=new Date(iso); return d.toLocaleString("zh-CN",{month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit"})}catch(e){return"—";}}
 async function viewTask(id){
   try{
@@ -541,8 +570,30 @@ async function viewTask(id){
   }catch(e){ toast("加载历史失败"); }
 }
 
+function bindUI(){
+  document.getElementById("homeBtn").addEventListener("click",goHome);
+  document.getElementById("copyBtn").addEventListener("click",copyReport);
+  document.getElementById("downloadBtn").addEventListener("click",downloadReport);
+  document.getElementById("historyBtn").addEventListener("click",toggleHistory);
+  document.getElementById("historyRefresh").addEventListener("click",loadHistory);
+  document.getElementById("runBtn").addEventListener("click",run);
+  document.getElementById("runBtn2").addEventListener("click",run);
+  document.querySelectorAll("[data-example]").forEach(button=>{
+    button.addEventListener("click",()=>useExample(Number(button.dataset.example)));
+  });
+  document.querySelectorAll("[data-inspector]").forEach(button=>{
+    button.addEventListener("click",()=>setInspector(button.dataset.inspector));
+  });
+  ["q","q2"].forEach(id=>{
+    document.getElementById(id).addEventListener("keydown",event=>{
+      if(event.key==="Enter"&&!event.shiftKey){ event.preventDefault(); run(); }
+    });
+  });
+}
+
+bindUI();
 window.addEventListener("load",()=>{ setMode("hero"); loadHistory(); loadObs(); });
-window.addEventListener("click",e=>{ const o=document.getElementById("historyOverlay"); if(!o.contains(e.target) && !e.target.closest(".icon-btn")) o.style.display="none"; });
+window.addEventListener("click",e=>{ const o=document.getElementById("historyOverlay"); if(!o.contains(e.target) && !e.target.closest(".icon-btn")) o.classList.remove("is-open"); });
 </script>
 </body>
 </html>

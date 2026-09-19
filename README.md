@@ -2,12 +2,11 @@
 
 [![CI](https://github.com/Caser-86/athena-research-agent/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Caser-86/athena-research-agent/actions)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
 
 输入一个研究问题，5 个专业智能体（Planner / Researcher / Analyst / Critic / Writer）基于 LangGraph 状态机协作，产出**带引用的结构化研究报告**，全程轨迹事件可流式推送、可回放、可评测。
 
-> 已上线能力：编排闭环 + RAG 混合检索 + MCP 工具 + HITL + 分层记忆 + 四维评测（CI 门禁）+ PostgreSQL 持久化 + pgvector 向量检索 + API 鉴权与 CORS 收敛 + 并发任务队列 + 历史回看 + Agent 工作台前端（Docker Compose 一键部署）
-> 文档：[PRD](docs/PRD.md) / [metrics](docs/metrics.md) / [architecture](docs/architecture.md) / [架构图](docs/architecture.svg) / [面试讲解稿](docs/interview-script.md)
+> 当前已实现并通过本地验证：编排闭环 + RAG 混合检索 + MCP 工具 + HITL + 分层记忆 + 四维评测（CI 门禁）+ 可选 PostgreSQL/pgvector 持久化 + API 鉴权与 CORS/Host 收敛 + 并发任务队列 + 历史回看 + Agent 工作台前端（Docker Compose 部署）。生产级沙箱、图状态 checkpoint 和分布式配额仍未完成。
+> 项目状态：[CONTEXT](CONTEXT.md) / [TODO](TODO.md)；技术文档：[PRD](docs/PRD.md) / [metrics](docs/metrics.md) / [architecture](docs/architecture.md) / [安全审计](docs/security-audit.md) / [架构图](docs/architecture.svg) / [面试讲解稿](docs/interview-script.md)
 
 ## 架构总览
 
@@ -54,7 +53,7 @@ Planner ──► Researcher ──► Analyst ──► Critic ──┬─(通
 ### 方式一：Docker Compose 一键部署（推荐）
 
 ```powershell
-# 根目录 .env 配置模型（无 Key 自动降级为演示模式）
+# 根目录 .env 配置模型与网关安全项（可复制 .env.example）
 docker compose up -d --build
 
 # 前端工作台：http://localhost:8888
@@ -62,6 +61,21 @@ docker compose up -d --build
 ```
 
 编排内容：`db`（PostgreSQL + pgvector）+ `api`（FastAPI）+ `web`（Nginx 静态托管 + 反向代理）。
+Docker 部署时，生产模式、CORS/Host 白名单、API Key 和显式映射的模型配置以根目录 `.env` 为准；
+`apps/api/.env` 作为未在 Compose 显式映射的 Embedding/Tavily 等补充配置来源。
+配置 `ATHENA_API_KEY` 时，Compose 会把同一个 Key 仅注入 Web 容器内的 Nginx
+反向代理；前端不从 URL 读取 Key，也不会把 Key 暴露给浏览器。
+
+生产环境请叠加 `deploy/docker-compose.production.yml`，它会要求数据库凭据、PostgreSQL DSN、
+模型凭据、API Key、CORS 来源和 Host 白名单，不会沿用根 Compose 的开发数据库密码，也不会把数据库端口
+映射到宿主机：
+
+```powershell
+docker compose -f docker-compose.yml -f deploy/docker-compose.production.yml up -d --build
+```
+
+生产变量可参考根目录 `.env.example`。`ATHENA_PG_DSN` 中的密码必须按 URI 规则编码；已有 PostgreSQL
+数据卷不会因修改 Compose 环境变量而自动更改用户密码，请先按运维流程迁移凭据并备份。
 
 ### 方式二：本地开发
 
@@ -69,7 +83,7 @@ docker compose up -d --build
 cd apps/api
 python -m venv .venv
 .venv\Scripts\Activate.ps1
-pip install -r requirements.txt
+pip install -r requirements-dev.lock.txt
 
 # 无 Key 演示模式（开箱即用，验证编排回路）
 Copy-Item .env.example .env
@@ -92,8 +106,13 @@ python -m uvicorn app.main:app --reload --port 8000
 
 > **鉴权**：配置 `ATHENA_API_KEY` 后，除 `/health` 外全部业务路由需要
 > `Authorization: Bearer <key>` 或 `X-API-Key: <key>` 请求头，否则返回 401；
-> 未配置时保持开放（仅本地/内网演示）。**CORS** 由 `ATHENA_CORS_ALLOWED_ORIGINS`
-> 白名单收敛，未配置则本地全放开。
+> 未配置时保持开放（仅本地/内网演示）。生产环境必须配置 `ATHENA_API_KEY`。**CORS** 由 `ATHENA_CORS_ALLOWED_ORIGINS`
+> 白名单收敛，未配置则本地全放开。生产环境设置 `ATHENA_ENVIRONMENT=production`；此时
+> 必须配置 CORS 白名单和 `ATHENA_ALLOWED_HOSTS` Host 白名单，且 `/docs`、`/redoc`、`/openapi.json` 默认关闭；生产环境同时禁用演示级
+> `python_sandbox` 与按任意路径读取 SQLite 的 MCP 能力。
+
+Docker Web 网关会对 `/api/research/run` 和 `/api/research/stream` 做按来源地址的基础速率限制；
+直接暴露 API 端口时仍应在外部网关配置统一限流、认证和配额。
 
 | 方法   | 路径                              | 说明                                                                                  |
 | ---- | ------------------------------- | ----------------------------------------------------------------------------------- |
@@ -106,17 +125,21 @@ python -m uvicorn app.main:app --reload --port 8000
 | POST | `/api/rag/search`               | RAG 混合检索结果（向量 + BM25 + RRF），供工作台演示与溯源                                               |
 | GET  | `/api/eval/summary`             | 四维指标评测汇总（含 Kappa 与 CI 门禁通过情况）                                                       |
 | GET  | `/api/eval/cases`               | 分用例评测明细                                                                             |
-| GET  | `/api/obs/summary`              | 可观测性聚合：LLM 次数 / token / 成本 / 时延 / 按 Agent 分账 / 最近任务                                 |
+| GET  | `/api/obs/summary`              | 可观测性聚合：LLM 次数 / token / 成本 / 时延 / 任务 P50/P95/P99 / 按 Agent 分账 / 最近任务              |
 | GET  | `/api/obs/spans`                | 本场会话全部 span 明细                                                                      |
 | POST | `/api/obs/reset`                | 清空观测（演示前调用）                                                                         |
 
 ### 可观测性（零依赖，可平滑迁移 Langfuse）
 
 内置轻量观测层（`app/obs.py`）采集每次 LLM 调用的 token / 成本 / 时延，并按 Agent 分账，
-同时记录任务级"打回次数、总成本、端到端时延"。成本按 `llm_price_per_1m_input/output` 单价核算；
+同时记录任务级"打回次数、总成本、端到端时延"，并在 `task_latency_ms` 中提供 P50/P95/P99。
+任务端到端时延写入 `research_tasks.latency_ms`，配置 SQL 后端时可跨进程统计；默认内存后端重启后样本会清空。
+成本按 `llm_price_per_1m_input/output` 单价核算；
 演示模式 token 为字符估算（synthetic），真实模式读取模型 usage 真值。前端评测看板内嵌成本卡片。
 如需完整 trace 平台，可自部署 `deploy/docker-compose.observability.yml`（Langfuse + pgvector），
-span 契约已收敛，迁移只需转发 obs 写入。
+span 契约已收敛，迁移只需转发 obs 写入。该可选编排文件不会提供默认密码、占位密钥或
+浮动镜像标签；启动前可复制 `deploy/.env.example` 为 `deploy/.env`，填写文件头部列出的变量，
+并使用已审核的镜像版本或 digest。
 
 ### 可插拔存储层
 
@@ -127,6 +150,7 @@ span 契约已收敛，迁移只需转发 obs 写入。
 - **SqlStorage**：SQLAlchemy 通用关系型后端，`ATHENA_PG_DSN` 启用。SQLite 与 PostgreSQL 走同一套
   `research_tasks` schema（含 JSON 列）。调用单元测试在真实 SQLite 上全量验证（含跨连接读回），
   生产切换为 `postgresql://` DSN 即可，为后续 LangGraph `PostgresSaver`（断点续跑）留有接口。
+ 生产使用 `ATHENA_VECTOR_STORE=postgres` 前，请由迁移/运维账号预先安装 `vector` 扩展；生产应用启动不会以运行账号执行扩展 DDL。
 
 ```powershell
 # 项目内 SQLite 持久化
@@ -166,6 +190,8 @@ curl -N -X POST http://127.0.0.1:8000/api/research/stream `
 ## 目录结构
 
 ```
+CONTEXT.md                         项目现状、架构边界和已知问题
+TODO.md                            当前未完成任务（按优先级）
 apps/
 ├── api/
 │   ├── app/
@@ -190,17 +216,20 @@ apps/
 │   │       ├── rag_routes.py     RAG 检索路由
 │   │       ├── eval_routes.py    评测看板路由（summary / cases）
 │   │       └── obs_routes.py     可观测性路由（summary / spans / reset）
-│   ├── tests/                    全部单元测试（无 Key 可跑，45 项）
+│   ├── tests/                    全部单元测试（无 Key 可跑，81 项）
 │   ├── requirements.txt
+│   ├── requirements.lock.txt     运行时可复现依赖
+│   ├── requirements-dev.lock.txt 开发/测试可复现依赖
 │   ├── pyproject.toml
 │   └── .env.example
 ├── web/                          Agent 工作台前端（单文件应用）
 │   ├── index.html                三栏布局：Agent 泳道 / Artifact 画布 / Inspector
 │   ├── nginx.conf                静态托管 + /api 反向代理（Cache-Control: no-store）
 │   └── Dockerfile
-docker-compose.yml                db(pgvector) + api + web 一键编排
-.github/workflows/ci.yml          单测 + 评测回归门禁（GitHub Actions）
-docs/                             PRD / metrics / architecture / 架构图 / 面试讲解稿
+docker-compose.yml                db(pgvector) + api + web 开发编排
+deploy/docker-compose.production.yml 生产配置覆盖（必填凭据与白名单）
+.github/workflows/ci.yml          单测 + 评测回归 + 静态检查（GitHub Actions）
+docs/                             PRD / metrics / architecture / security-audit / 架构图 / 面试讲解稿
 ```
 
 ## 测试与评测
@@ -210,13 +239,10 @@ docs/                             PRD / metrics / architecture / 架构图 / 面
 cd apps/api
 pytest -v                          # 无需 API Key，验证完整链路
 
-# Docker 容器内（测试基线需要 max_iterations=3）
-docker compose exec -T -e ATHENA_MAX_ITERATIONS=3 api pytest -q
-
 # 全量评测，未达标 exit 1
 python -m app.eval.harness --threshold 0.5
 ```
 
-当前 Docker 容器内全量 **45 项 pytest 测试通过**；GitHub Actions CI（单测 + 评测回归门禁）已在 [main 分支](https://github.com/Caser-86/athena-research-agent/actions) 实测通过。
+当前本地全量 **81 项 pytest 测试通过**；GitHub Actions CI 已配置单测、评测回归、Ruff、compileall、文档契约以及主/生产 Compose 配置校验，会在 push、PR 和手动触发时执行。
 
-真实模型全量评测（deepseek-v4-flash，3 轮迭代，golden set=4）：overall **0.8775 → PASS**；对照单轮 0.8025——Critic 打回回路带来覆盖率 0.67→0.92、成功率 0.25→0.75（详见 [metrics](docs/metrics.md)）。
+历史真实模型评测基线（deepseek-v4-flash，3 轮迭代，golden set=4）：overall **0.8775 → PASS**；对照单轮 0.8025——Critic 打回回路带来覆盖率 0.67→0.92、成功率 0.25→0.75（详见 [metrics](docs/metrics.md)）。当前无 Key 演示评测与真实模型基线分开记录。

@@ -2,11 +2,9 @@
 
 from __future__ import annotations
 
-import os
-
 from fastapi.testclient import TestClient
 
-from app.storage import Base, InMemoryStorage, SqlStorage
+from app.storage import InMemoryStorage, SqlStorage
 
 
 def _sample(task_id: str) -> dict:
@@ -20,6 +18,7 @@ def _sample(task_id: str) -> dict:
         "findings": [{"subtask_id": "t1", "claim": "事实A"}],
         "analysis": "交叉验证",
         "mock_mode": "True",
+        "latency_ms": 123.4,
     }
 
 
@@ -29,6 +28,16 @@ def test_in_memory_crud():
     assert st.get_task("a1")["question"] == "测试问题"
     assert st.get_task("nope") is None
     assert [t["task_id"] for t in st.list_tasks()] == ["a1"]
+
+
+def test_in_memory_reads_are_isolated_from_internal_state():
+    st = InMemoryStorage()
+    st.save_task(_sample("isolated"))
+
+    returned = st.get_task("isolated")
+    returned["question"] = "caller mutation"
+
+    assert st.get_task("isolated")["question"] == "测试问题"
 
 
 def test_sql_storage_crud(tmp_path):
@@ -43,6 +52,8 @@ def test_sql_storage_crud(tmp_path):
     assert row["critique"]["score"] == 8.0
     assert row["plan"][0]["title"] == "任务一"
     assert row["findings"][0]["claim"] == "事实A"
+    assert row["latency_ms"] == 123.4
+    assert st.list_task_latencies() == [123.4]
     assert st.get_task("missing") is None
     assert [t["task_id"] for t in st.list_tasks()] == ["sql-1"]
 
@@ -62,7 +73,7 @@ def test_api_tasks_with_sql_dsn(tmp_path, monkeypatch):
 
     from app.main import app
 
-    c = TestClient(app)  # noqa: F841
+    c = TestClient(app)
     r = c.post("/api/research/run", json={"question": "入库问题"})
     assert r.status_code == 200
     task_id = r.json()["task_id"]

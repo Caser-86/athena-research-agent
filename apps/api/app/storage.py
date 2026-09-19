@@ -12,16 +12,28 @@
 
 from __future__ import annotations
 
+import copy
 import threading
 from abc import ABC, abstractmethod
 
-from sqlalchemy import JSON, Column, DateTime, Integer, String, Text, func
-from sqlalchemy import create_engine
+from sqlalchemy import (
+    JSON,
+    Column,
+    DateTime,
+    Float,
+    Integer,
+    String,
+    Text,
+    create_engine,
+    func,
+    inspect,
+    text,
+)
 from sqlalchemy.engine import Engine
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import DeclarativeBase, Session
 
 from app.config import get_settings
-
 
 # ---------------------------------------------------------------------------
 # 抽象
@@ -37,6 +49,9 @@ class StorageBackend(ABC):
     @abstractmethod
     def list_tasks(self, limit: int = 20) -> list[dict]: ...
 
+    @abstractmethod
+    def list_task_latencies(self, limit: int = 10_000) -> list[float]: ...
+
 
 # ---------------------------------------------------------------------------
 # 内存实现（默认）
@@ -51,21 +66,35 @@ class InMemoryStorage(StorageBackend):
 
     def save_task(self, task: dict) -> None:
         with self._lock:
-            stored = dict(task)
+            stored = copy.deepcopy(task)
             # 内存后端补充 created_at，与 SQL 后端对齐（ISO 字符串）
             if "created_at" not in stored:
-                import datetime
+                from datetime import UTC, datetime
 
-                stored["created_at"] = datetime.datetime.now().isoformat()
+                stored["created_at"] = datetime.now(UTC).isoformat()
             self._store[task["task_id"]] = stored
 
     def get_task(self, task_id: str) -> dict | None:
         with self._lock:
-            return self._store.get(task_id)
+            task = self._store.get(task_id)
+            return copy.deepcopy(task) if task is not None else None
 
     def list_tasks(self, limit: int = 20) -> list[dict]:
         with self._lock:
-            return list(self._store.values())[-limit:]
+            if limit <= 0:
+                return []
+            return [copy.deepcopy(task) for task in list(self._store.values())[-limit:]]
+
+    def list_task_latencies(self, limit: int = 10_000) -> list[float]:
+        with self._lock:
+            if limit <= 0:
+                return []
+            values = [
+                float(task["latency_ms"])
+                for task in list(self._store.values())[-limit:]
+                if task.get("latency_ms") is not None
+            ]
+            return values
 
 
 # ---------------------------------------------------------------------------
@@ -89,6 +118,7 @@ class ResearchTask(Base):
     findings = Column(JSON, nullable=True)
     analysis = Column(Text, default="")
     mock_mode = Column(String(16), default="")
+    latency_ms = Column(Float, nullable=True)
     created_at = Column(DateTime, server_default=func.now())
 
 
@@ -96,10 +126,29 @@ class SqlStorage(StorageBackend):
     """通用关系型后端。DSN 形如 sqlite:///athena.db 或 postgresql://user:pw@host/db。"""
 
     def __init__(self, dsn: str) -> None:
-        assert dsn, "SqlStorage 需要非空 DSN"
+        if not dsn:
+            raise ValueError("SqlStorage 需要非空 DSN")
         self.engine: Engine = create_engine(dsn, future=True)
         Base.metadata.create_all(self.engine)
-        self._session = sessionmaker(bind=self.engine, expire_on_commit=False)
+        self._ensure_legacy_columns()
+
+    def _ensure_legacy_columns(self) -> None:
+        """为 create_all 无法升级的旧库补齐兼容列。
+
+        正式生产库仍应使用版本化 migration；这里仅保证从旧审计版本升级
+        到当前版本时，任务写入不会因新增观测字段而中断。
+        """
+        columns = {column["name"] for column in inspect(self.engine).get_columns("research_tasks")}
+        if "latency_ms" not in columns:
+            try:
+                with self.engine.begin() as connection:
+                    connection.execute(text("ALTER TABLE research_tasks ADD COLUMN latency_ms FLOAT"))
+            except SQLAlchemyError:
+                # 多个 API 实例同时从旧库启动时，另一个实例可能已经完成 DDL。
+                # 只有确认列已经出现才吞掉冲突；权限、连接等真实错误继续抛出。
+                columns = {column["name"] for column in inspect(self.engine).get_columns("research_tasks")}
+                if "latency_ms" not in columns:
+                    raise
 
     def save_task(self, task: dict) -> None:
         with Session(self.engine) as s, s.begin():
@@ -113,6 +162,7 @@ class SqlStorage(StorageBackend):
                 findings=task.get("findings"),
                 analysis=task.get("analysis", ""),
                 mock_mode=str(task.get("mock_mode", "")),
+                latency_ms=task.get("latency_ms"),
             )
             s.add(row)
 
@@ -128,6 +178,19 @@ class SqlStorage(StorageBackend):
             rows = s.query(ResearchTask).order_by(ResearchTask.id.desc()).limit(limit).all()
         return [self._row_to_dict(r) for r in rows]
 
+    def list_task_latencies(self, limit: int = 10_000) -> list[float]:
+        if limit <= 0:
+            return []
+        with Session(self.engine) as s:
+            rows = (
+                s.query(ResearchTask.latency_ms)
+                .filter(ResearchTask.latency_ms.is_not(None))
+                .order_by(ResearchTask.id.desc())
+                .limit(limit)
+                .all()
+            )
+        return [float(row[0]) for row in rows]
+
     @staticmethod
     def _row_to_dict(row: ResearchTask) -> dict:
         return {
@@ -140,6 +203,7 @@ class SqlStorage(StorageBackend):
             "findings": row.findings,
             "analysis": row.analysis,
             "mock_mode": row.mock_mode,
+            "latency_ms": row.latency_ms,
             "created_at": row.created_at.isoformat() if row.created_at else None,
         }
 

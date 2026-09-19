@@ -1,9 +1,17 @@
-from sqlalchemy import text, create_engine
-engine = create_engine("postgresql+psycopg://postgres:920220@localhost:5432/postgres")
+import os
+
+from sqlalchemy import create_engine, text
+
+from app.rag.pg_store import PgVectorStore
+
+dsn = os.environ.get("ATHENA_PG_DSN")
+if not dsn:
+    raise SystemExit("请先设置 ATHENA_PG_DSN，再运行 PostgreSQL 检查脚本")
+
+engine = create_engine(dsn)
 with engine.begin() as c:
     c.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-from app.rag.pg_store import PgVectorStore
-s = PgVectorStore("postgresql+psycopg://postgres:920220@localhost:5432/postgres")
+s = PgVectorStore(dsn)
 n0 = s.count()
 doc = """
 RAG（检索增强生成）与 Agent 编排是当下两种主流方案。RAG 适合知识密集、答案需可溯源的任务，

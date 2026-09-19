@@ -5,7 +5,7 @@
 
 - `remember(...)`: 研究结束时写入经验（策略/坑/结果）
 - `recall(query, k)`: 基于关键词相似度检索历史经验，供 Planner 参考
-第 4 周将把 recall 升级为向量检索（复用 RAG embedder）。
+当前 recall 使用轻量关键词重叠；如评测证明有收益，可复用 RAG embedder 升级为向量检索。
 """
 
 from __future__ import annotations
@@ -36,10 +36,9 @@ class Experience:
 
 
 def _keywords(text: str) -> set[str]:
-    return set(
-        w.lower()
-        for w in re.findall(r"[a-zA-Z0-9_+-]+", text)
-    ) | set(re.findall(r"[\u4e00-\u9fff]", text))
+    return {w.lower() for w in re.findall(r"[a-zA-Z0-9_+-]+", text)} | set(
+        re.findall(r"[\u4e00-\u9fff]", text)
+    )
 
 
 class ExperienceMemory:

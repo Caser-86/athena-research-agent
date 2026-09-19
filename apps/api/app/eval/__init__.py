@@ -15,14 +15,22 @@ from .metrics import (
     cohen_kappa,
     compute_metrics,
 )
-from .harness import EvalReport, run_harness
 
 __all__ = [
     "GOLDEN_SET",
+    "EvalReport",
     "GoldenCase",
     "MetricsBundle",
     "cohen_kappa",
     "compute_metrics",
-    "EvalReport",
     "run_harness",
 ]
+
+
+def __getattr__(name: str):
+    """按需导出 CLI 评测对象，避免 `python -m app.eval.harness` 循环预加载。"""
+    if name in {"EvalReport", "run_harness"}:
+        from .harness import EvalReport, run_harness
+
+        return {"EvalReport": EvalReport, "run_harness": run_harness}[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

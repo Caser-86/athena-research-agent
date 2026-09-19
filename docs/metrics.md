@@ -1,4 +1,4 @@
-# Metrics —— 五维指标体系与口径
+# Metrics —— 质量指标与运营指标口径
 
 > 目标：让 Agent 的质量**可度量、可优化、可进 CI**。任何功能改动必须以指标变化为前提提交。
 
@@ -9,14 +9,15 @@
 | **任务成功率** | Golden Set 中要点覆盖率 ≥0.8 的用例占比 | eval harness `task_success_rate` | Critic 质量回路、查询改写、多源检索 |
 | **引用准确率** | 报告 `[Sn]` 引用都能在证据集中找到且成立的占比 | `citation_accuracy` | 引用对齐、检索重排 |
 | **证据充分性** | findings 覆盖 Golden 期望证据域的占比 | `evidence_sufficiency` | 检索召回、分块粒度 |
-| **P95 端到端时延** | 问题输入→报告产出的 P95（秒） | 内置 obs 层（span 级时延） | Researcher 并行、模型分级路由 |
+| **P95 端到端时延** | 问题输入→报告产出的 P95（毫秒） | 任务历史 `latency_ms` + `/api/obs/summary` | Researcher 并行、模型分级路由 |
 | **单任务成本** | 每次任务 token×单价 聚合 | 内置 obs 层（真实 usage / 演示估算） | 成本路由、缓存命中 |
 
 ## 评测口径
 
-- **Golden Set**：`app/eval/golden_set.py`，当前 4 条代表性用例（完整 100 条可扩展）
+- **Golden Set**：`app/eval/golden_set.py`，当前 4 条代表性用例；尚未建立 100 条完整评测集
 - **一次评测**：对每条用例跑一次完整编排，计算四维分 + 综合分
-- **门禁**：`python -m app.eval.harness --threshold 0.5`，综合分低于阈值 exit 1（阻断合并）
+- **门禁**：`python -m app.eval.harness --threshold 0.5`，综合分低于阈值 exit 1（阻断合并）。
+- `/api/obs/summary` 的 `task_latency_ms` 提供 `count`、`p50`、`p95`、`p99`；任务完成时将端到端时延写入 `research_tasks.latency_ms`。配置 SQL 后端时可跨进程保留样本，默认内存后端仅在当前进程内统计。
 
 ## 指标 = 证词，不是装饰
 
@@ -25,7 +26,7 @@
 
 ## 已接入的能力基线
 
-**真实模型模式**（deepseek-v4-flash，容器内 harness 实测，golden set=4）：
+**历史真实模型基线**（deepseek-v4-flash，容器内 harness 实测，golden set=4）：
 
 3 轮迭代（CI 基线配置，Critic 打回回路生效）——2026-09-03 实测：
 
@@ -51,13 +52,14 @@ judge 一致性   kappa 0.0
 **Critic 回路价值实测**：迭代 1 → 3 轮，任务覆盖率 0.67 → 0.92、成功率 0.25 → 0.75、综合分 0.80 → 0.88——同一系统仅切换 `ATHENA_MAX_ITERATIONS` 的对照跑分，直接量化了质量回路的收益。
 运行口径：3 轮全量评测共 44 次 LLM 调用、端到端约 70 分钟（方舟计划端点存在限流排队，需 `ATHENA_REQUEST_TIMEOUT_SECONDS=300` + 客户端重试兜底）。
 
-**演示模式**（无 Key，基于真实本地 RAG 检索）：
+**最近一次演示模式验证**（无 Key、强制 mock，基于真实本地 RAG 检索；2026-09-19）：
 
 ```
-整体综合分     0.87   (演示模式 · golden set=4)
+整体综合分     0.895  (演示模式 · golden set=4 · threshold=0.5 → PASS)
 任务覆盖率     1.00
 引用准确率     1.00
-证据充分性     0.50   # 部分期望域未被种子库覆盖，属真实检索边界
+证据充分性     0.625  # 部分期望域未被种子库覆盖，属真实检索边界
+任务成功率     1.00
 judge 一致性   1.0
 ```
 

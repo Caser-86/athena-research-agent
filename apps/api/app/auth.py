@@ -8,6 +8,8 @@
 
 from __future__ import annotations
 
+import secrets
+
 from fastapi import Header, HTTPException, status
 
 from app.config import get_settings
@@ -24,7 +26,7 @@ def _verify(token: str | None) -> None:
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="缺少 API Key：请携带 Authorization: Bearer <key> 或 X-API-Key: <key>",
         )
-    if token.strip() != settings.api_key:
+    if not secrets.compare_digest(token.strip(), settings.api_key):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="API Key 无效",

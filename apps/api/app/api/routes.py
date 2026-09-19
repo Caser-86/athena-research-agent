@@ -1,16 +1,18 @@
 """研究任务路由：同步运行 / SSE 流式 / 任务查询。
 
-任务存储：第 1 周使用进程内字典（演示足够），第 2 周替换为 PostgreSQL。
+任务存储：默认使用进程内存储；配置 ATHENA_PG_DSN 后切换到 SQLAlchemy
+（SQLite/PostgreSQL）持久化。
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import threading
 import uuid
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.config import get_settings
@@ -20,6 +22,7 @@ from app.schemas import ResearchRequest, ResearchResult
 from app.storage import get_storage
 
 router = APIRouter(prefix="/api/research", tags=["research"])
+logger = logging.getLogger(__name__)
 
 # 并发控制：全局信号量限制同时运行的编排任务数（默认 4）。
 # 超出并发上限的请求会进入排队（注册表标记 waiting），避免大量慢任务挤爆进程。
@@ -70,33 +73,38 @@ async def _run_graph(question: str, task_id: str, bus: EventBus | None = None) -
 
     from app import obs
 
-    _q_register(task_id, "running", question)
+    _q_register(task_id, "waiting", question)
     try:
         async with _concurrency:
+            _q_update(task_id, status="running")
             start = time.monotonic()
-            graph = get_research_graph()
-            state = {"question": question, "task_id": task_id}
-            final_state = await graph.ainvoke(
-                state,
-                config={"configurable": {"thread_id": task_id, "event_bus": bus}},
-            )
-            result = {
-                "task_id": task_id,
-                "question": question,
-                "report": final_state.get("report", ""),
-                "iteration": final_state.get("iteration", 1),
-                "critique": final_state.get("critique"),
-                "plan": final_state.get("plan", []),
-                "findings": final_state.get("findings", []),
-                "analysis": final_state.get("analysis", ""),
-                "mock_mode": get_settings().mock_mode,
-            }
-            # 可观测性：任务级记录（iteration - 1 = Critic 打回重试次数）
-            obs.record_task(
-                question=question,
-                iterations=final_state.get("iteration", 1),
-                latency_ms=(time.monotonic() - start) * 1000,
-            )
+            with obs.task_context(task_id):
+                graph = get_research_graph()
+                state = {"question": question, "task_id": task_id}
+                final_state = await graph.ainvoke(
+                    state,
+                    config={"configurable": {"thread_id": task_id, "event_bus": bus}},
+                )
+                latency_ms = (time.monotonic() - start) * 1000
+                result = {
+                    "task_id": task_id,
+                    "question": question,
+                    "report": final_state.get("report", ""),
+                    "iteration": final_state.get("iteration", 1),
+                    "critique": final_state.get("critique"),
+                    "plan": final_state.get("plan", []),
+                    "findings": final_state.get("findings", []),
+                    "analysis": final_state.get("analysis", ""),
+                    "mock_mode": get_settings().mock_mode,
+                    "latency_ms": round(latency_ms, 1),
+                }
+                # 可观测性：任务级记录（iteration - 1 = Critic 打回重试次数）
+                obs.record_task(
+                    task_id=task_id,
+                    question=question,
+                    iterations=final_state.get("iteration", 1),
+                    latency_ms=latency_ms,
+                )
             # 持久化：内存或 SQL（DSN 配置），SQL 时跨进程可查
             await asyncio.to_thread(get_storage().save_task, result)
             return result
@@ -123,27 +131,33 @@ async def stream_research(body: ResearchRequest) -> StreamingResponse:
         bus = EventBus()
         task = asyncio.create_task(_run_graph(body.question, task_id, bus))
         try:
-            while True:
-                try:
-                    event = await asyncio.wait_for(bus.get(), timeout=0.5)
-                except asyncio.TimeoutError:
-                    if task.done():
-                        break
-                    continue
-                yield f"event: {event['type']}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
-            # 消费残余事件，保证轨迹完整
-            while not bus.empty():
-                event = await bus.get()
-                yield f"event: {event['type']}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
-        except asyncio.CancelledError:
-            task.cancel()
-            raise
+            try:
+                while True:
+                    try:
+                        event = await asyncio.wait_for(bus.get(), timeout=0.5)
+                    except asyncio.TimeoutError:
+                        if task.done():
+                            break
+                        continue
+                    yield f"event: {event['type']}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
+                # 消费残余事件，保证轨迹完整
+                while not bus.empty():
+                    event = await bus.get()
+                    yield f"event: {event['type']}\ndata: {json.dumps(event, ensure_ascii=False)}\n\n"
+            except asyncio.CancelledError:
+                task.cancel()
+                raise
 
-        try:
-            result = await task
-            yield f"event: final\ndata: {json.dumps(result, ensure_ascii=False)}\n\n"
-        except Exception as exc:  # noqa: BLE001 — SSE 通道需要把异常透传给客户端
-            yield f"event: error\ndata: {json.dumps({'message': str(exc)}, ensure_ascii=False)}\n\n"
+            try:
+                result = await task
+                yield f"event: final\ndata: {json.dumps(result, ensure_ascii=False)}\n\n"
+            except Exception:
+                logger.exception("research stream failed: task_id=%s", task_id)
+                yield f"event: error\ndata: {json.dumps({'message': '研究任务执行失败，请稍后重试', 'task_id': task_id}, ensure_ascii=False)}\n\n"
+        finally:
+            if not task.done():
+                task.cancel()
+            _q_deregister(task_id)
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
@@ -155,7 +169,7 @@ async def queue_status() -> dict:
 
 
 @router.get("/tasks")
-async def list_task_history(limit: int = 15) -> dict:
+async def list_task_history(limit: int = Query(default=15, ge=1, le=100)) -> dict:
     """历史任务列表（不含整篇报告，仅摘要字段，便于前端渲染列表）。"""
     tasks = await asyncio.to_thread(get_storage().list_tasks, limit)
     summary = [

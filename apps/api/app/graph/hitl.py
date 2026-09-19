@@ -6,12 +6,10 @@
 - `reflect`：研究结束后沉淀经验到长期记忆，供后续研究复用。
 """
 
-from __future__ import annotations
-
 from typing import Any
 
 from langchain_core.runnables import RunnableConfig
-from langgraph.types import Command, interrupt
+from langgraph.types import interrupt
 
 from app.graph.events import get_bus
 from app.graph.state import ResearchState
@@ -19,7 +17,14 @@ from app.memory import get_memory
 
 
 def is_human_approval_enabled(config: RunnableConfig | None) -> bool:
-    return bool((config.get("configurable") or {}).get("human_approval", False))
+    return bool((config or {}).get("configurable", {}).get("human_approval", False))
+
+
+def _approval_value(decision: Any) -> bool:
+    """把 interrupt resume 的布尔值或结构化决定统一转换为审批结果。"""
+    if isinstance(decision, dict):
+        return bool(decision.get("approved", False))
+    return bool(decision)
 
 
 async def approval_gate(
@@ -33,7 +38,7 @@ async def approval_gate(
 
     if high_risk and is_human_approval_enabled(config):
         decision = interrupt({"review": "是否批准该研究计划执行？", "question": state["question"]})
-        approved = bool(decision)
+        approved = _approval_value(decision)
         if bus is not None:
             await bus.emit("human_decision", approved=approved, question=state["question"])
         if not approved:

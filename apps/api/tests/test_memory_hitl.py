@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import pytest
-from langgraph.types import Command
 
 from app.graph.builder import build_research_graph
 from app.memory import ExperienceMemory, get_memory
-
 
 QUESTION = "对比三个国产新能源品牌的销量与产品策略"
 
@@ -46,20 +44,15 @@ async def test_hitl_interrupt_and_resume():
         pass
 
     cfg = {"configurable": {"thread_id": "memo-3", "human_approval": True}}
-    graph = build_research_graph()
-
     # 直接验证 interrupt 语义：approval_gate 在 human_approval+高风险时挂起
     # 为隔离验证，用一个 plan 含「执行代码」的 state
     state = {
         "question": "执行代码计算销量",
         "plan": [{"id": "t1", "title": "执行代码完成计算", "purpose": "x"}],
     }
-    from langchain_core.runnables import RunnableConfig
-    from langgraph.types import interrupt
-
     called = {}
 
-    def fake_interrupt(_):  # noqa: ANN001
+    def fake_interrupt(_):
         called["hit"] = True
         return True
 
@@ -76,6 +69,31 @@ async def test_hitl_interrupt_and_resume():
         hitl_mod.interrupt = orig
 
 
+@pytest.mark.asyncio
+async def test_approval_gate_defaults_to_auto_approve_without_config():
+    from app.graph.hitl import approval_gate
+
+    state = {
+        "question": "执行代码计算销量",
+        "plan": [{"id": "t1", "title": "执行代码完成计算", "purpose": "x"}],
+    }
+    assert await approval_gate(state, None) == {"blocked": False}
+
+
+@pytest.mark.asyncio
+async def test_approval_gate_honors_explicit_decision_payload(monkeypatch):
+    import app.graph.hitl as hitl_mod
+
+    state = {
+        "question": "执行代码计算销量",
+        "plan": [{"id": "t1", "title": "执行代码完成计算", "purpose": "x"}],
+    }
+    monkeypatch.setattr(hitl_mod, "interrupt", lambda _: {"approved": False})
+    assert await hitl_mod.approval_gate(
+        state, {"configurable": {"human_approval": True}}
+    ) == {"blocked": True}
+
+
 def test_experience_memory_roundtrip_and_recall():
     mem = ExperienceMemory()
     mem.remember("t1", "新能源销量分析", "多源检索避免证据不足", ["单源易漏"], "成功")
@@ -84,6 +102,5 @@ def test_experience_memory_roundtrip_and_recall():
 
 
 def test_memory_persisted_by_reflect_in_graph():
-    graph = build_research_graph()
     # 用同步 run 触发 reflect（已由前序测试运行），内存计数应增长
     assert get_memory().count() >= 0

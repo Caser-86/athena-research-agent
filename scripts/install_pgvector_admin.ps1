@@ -25,7 +25,11 @@ Write-Output ("服务状态: " + $svc.Status)
 if ($svc.Status -ne "Running") { throw "PostgreSQL 服务未运行" }
 
 Write-Output "[4/4] 创建 vector 扩展并验证"
-$env:PGPASSWORD = "920220"
+$pgPassword = $env:ATHENA_PG_ADMIN_PASSWORD
+if ([string]::IsNullOrWhiteSpace($pgPassword)) {
+    throw "请先设置环境变量 ATHENA_PG_ADMIN_PASSWORD，再运行本脚本"
+}
+$env:PGPASSWORD = $pgPassword
 & "$pgBin\psql.exe" -U postgres -h localhost -p 5432 -d postgres -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS vector;" | Out-Host
 & "$pgBin\psql.exe" -U postgres -h localhost -p 5432 -d postgres -t -c "SELECT extversion FROM pg_extension WHERE extname='vector';" | Out-Host
 & "$pgBin\psql.exe" -U postgres -h localhost -p 5432 -d postgres -t -c "SELECT '[1,2,3]'::vector <-> '[1,2,4]' AS dist;" | Out-Host

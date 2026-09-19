@@ -16,7 +16,7 @@ class CritiqueView(BaseModel):
 
 
 class ResearchResult(BaseModel):
-    """同步运行结果：报告 + 关键状态摘要（轨迹级可视化在第 2 周前端工作台提供）。"""
+    """同步运行结果：报告 + 关键状态摘要；轨迹通过 SSE 流式接口提供。"""
 
     task_id: str
     question: str

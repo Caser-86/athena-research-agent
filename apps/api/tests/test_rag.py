@@ -49,3 +49,40 @@ def test_seed_corpus_includes_expected_docs():
     titles = [d[1] for d in SEED_DOCS]
     for kw in ("新能源", "RAG", "Agent"):
         assert any(kw in t for t in titles), f"种子库缺少主题：{kw}"
+
+
+def test_pg_store_does_not_create_extension_in_production(monkeypatch):
+    import pytest
+
+    from app.config import get_settings
+    from app.rag import pg_store
+
+    if not pg_store._HAS_PGVECTOR:
+        pytest.skip("pgvector dependency is not installed")
+
+    executed: list[str] = []
+
+    class Transaction:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def execute(self, statement):
+            executed.append(str(statement))
+
+    class Engine:
+        def begin(self):
+            return Transaction()
+
+    store = pg_store.PgVectorStore.__new__(pg_store.PgVectorStore)
+    store._engine = Engine()
+    monkeypatch.setattr(pg_store.Base.metadata, "create_all", lambda _engine: None)
+    monkeypatch.setenv("ATHENA_ENVIRONMENT", "production")
+    get_settings.cache_clear()
+    try:
+        store._init_schema()
+        assert not any("CREATE EXTENSION" in statement for statement in executed)
+    finally:
+        get_settings.cache_clear()

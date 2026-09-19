@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Annotated
 
 from fastapi import APIRouter, Query
@@ -11,14 +12,16 @@ from app.eval.harness import EvalReport, run_harness
 router = APIRouter(prefix="/api/eval", tags=["eval"])
 
 _cached: dict[float, EvalReport] = {}
+_cache_lock = asyncio.Lock()
 
 
 async def _get_report(threshold: float) -> EvalReport:
     """按阈值缓存评测结果：同一 threshold 不重复反复跑（看板轮询用）。
     演示模式下 harness 为确定性结果，缓存安全。"""
-    if threshold not in _cached:
-        _cached[threshold] = await run_harness(threshold)
-    return _cached[threshold]
+    async with _cache_lock:
+        if threshold not in _cached:
+            _cached[threshold] = await run_harness(threshold)
+        return _cached[threshold]
 
 
 @router.get("/summary")

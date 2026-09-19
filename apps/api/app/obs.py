@@ -12,6 +12,9 @@ from __future__ import annotations
 
 import threading
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 
 from app.config import get_settings
@@ -23,6 +26,7 @@ _SAMPLE_PRICE_OUT = 8.0
 _lock = threading.Lock()
 _spans: list[dict] = []
 _tasks: list[dict] = []
+_current_task_id: ContextVar[str] = ContextVar("athena_obs_task_id", default="")
 
 
 @dataclass
@@ -35,6 +39,16 @@ def reset() -> None:
     with _lock:
         _spans.clear()
         _tasks.clear()
+
+
+@contextmanager
+def task_context(task_id: str) -> Iterator[None]:
+    """将当前异步上下文中的 LLM/MCP span 归属到指定任务。"""
+    token = _current_task_id.set(task_id)
+    try:
+        yield
+    finally:
+        _current_task_id.reset(token)
 
 
 def _now() -> float:
@@ -76,6 +90,7 @@ def record_llm(
                 "cost": round(cost, 6),
                 "latency_ms": round(latency_ms, 2),
                 "mock": mock,
+                "task_id": _current_task_id.get(),
             }
         )
     return cost
@@ -103,17 +118,23 @@ def record_tool(
                 "latency_ms": round(latency_ms, 2),
                 "args_preview": args_preview[:80],
                 "mock": False,
+                "task_id": _current_task_id.get(),
             }
         )
     return 0.0
 
 
-def record_task(*, question: str, iterations: int, latency_ms: float) -> None:
+def record_task(*, task_id: str = "", question: str, iterations: int, latency_ms: float) -> None:
     with _lock:
-        spans = [s for s in _spans if s["type"] == "llm"]
+        spans = [
+            s
+            for s in _spans
+            if s["type"] == "llm" and (not task_id or s.get("task_id") == task_id)
+        ]
         _tasks.append(
             {
                 "ts": _now(),
+                "task_id": task_id,
                 "question": question[:60],
                 "iterations": iterations,
                 "llm_calls": len(spans),
@@ -134,7 +155,19 @@ def get_tasks() -> list[dict]:
         return list(_tasks)
 
 
-def summary() -> dict:
+def _percentile(values: list[float], percentile: float) -> float:
+    """线性插值计算百分位；空样本返回 0，避免看板出现 NaN。"""
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    position = (len(ordered) - 1) * percentile / 100
+    lower = int(position)
+    upper = min(lower + 1, len(ordered) - 1)
+    fraction = position - lower
+    return round(ordered[lower] + (ordered[upper] - ordered[lower]) * fraction, 2)
+
+
+def summary(*, task_latencies: list[float] | None = None) -> dict:
     with _lock:
         spans = list(_spans)
         tasks = list(_tasks)
@@ -150,6 +183,11 @@ def summary() -> dict:
 
     last = tasks[-1] if tasks else None
     tools = [s for s in spans if s["type"] == "tool"]
+    latency_values = (
+        [float(value) for value in task_latencies if value is not None]
+        if task_latencies is not None
+        else [float(task["latency_ms"]) for task in tasks if task.get("latency_ms") is not None]
+    )
     return {
         "llm_calls": len(llm),
         "tool_calls": len(tools),
@@ -166,6 +204,12 @@ def summary() -> dict:
         "total_cost": round(sum(s["cost"] for s in llm), 6),
         "total_latency_ms": round(sum(s["latency_ms"] for s in llm), 1),
         "avg_llm_latency_ms": round(sum(s["latency_ms"] for s in llm) / len(llm), 2) if llm else 0.0,
+        "task_latency_ms": {
+            "count": len(latency_values),
+            "p50": _percentile(latency_values, 50),
+            "p95": _percentile(latency_values, 95),
+            "p99": _percentile(latency_values, 99),
+        },
         "per_agent": per_agent,
         "task_count": len(tasks),
         "last_task": last,

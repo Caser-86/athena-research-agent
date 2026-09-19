@@ -61,8 +61,8 @@ def build_research_graph():
     graph.add_edge("writer", "reflect")
     graph.add_edge("reflect", END)
 
-    # MemorySaver：进程内持久化，支持同 thread_id 断点续跑
-    # （第 2 周替换为 PostgreSQL checkpointer，支撑跨进程恢复）
+    # MemorySaver：进程内持久化，支持同 thread_id 断点续跑；生产多进程部署
+    # 仍需替换为 PostgreSQL 等共享 checkpointer，才能支持跨进程恢复。
     return graph.compile(checkpointer=MemorySaver())
 
 
