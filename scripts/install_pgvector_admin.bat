@@ -62,7 +62,12 @@ if errorlevel 1 (
 echo [OK] 服务已重启。
 
 echo [+] [4/4] 创建 vector 扩展并验证...
-set PGPASSWORD=920220
+if "%ATHENA_PG_ADMIN_PASSWORD%"=="" (
+    echo [-] 未设置 ATHENA_PG_ADMIN_PASSWORD，请先在当前终端设置管理员密码
+    pause
+    exit /b 1
+)
+set "PGPASSWORD=%ATHENA_PG_ADMIN_PASSWORD%"
 "%PGROOT%\bin\psql.exe" -U postgres -h localhost -p 5432 -d postgres -v ON_ERROR_STOP=1 -c "CREATE EXTENSION IF NOT EXISTS vector;"
 if errorlevel 1 (
     echo [-] 创建 vector 扩展失败，请检查 psql 输出

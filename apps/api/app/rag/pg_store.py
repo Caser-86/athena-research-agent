@@ -12,15 +12,23 @@ import uuid
 from typing import Any
 
 from sqlalchemy import Index, Text, create_engine, text
-from sqlalchemy.orm import DeclarativeBase, Session, mapped_column
+from sqlalchemy.orm import DeclarativeBase, mapped_column
 
-from app.rag.embedder import embed, embedding_dim
-from app.rag.store import RRF_K, _VEC_WEIGHT, _cosine, _tokenize, ScoredChunk, split_text
+from app.config import get_settings
+from app.rag.embedder import embed
+from app.rag.store import (
+    _VEC_WEIGHT,
+    RRF_K,
+    ScoredChunk,
+    _cosine,
+    _tokenize,
+    split_text,
+)
 
 try:
     from pgvector.sqlalchemy import Vector
     _HAS_PGVECTOR = True
-except Exception:  # pragma: no cover
+except ImportError:  # pragma: no cover
     Vector = None
     _HAS_PGVECTOR = False
 
@@ -65,9 +73,11 @@ class PgVectorStore:
         self._init_schema()
 
     def _init_schema(self) -> None:
-        # 确保 vector 扩展开启（需库管理员有 CREATE 权限；可用 pgcrypto 之外的无 prep）
-        with self._engine.begin() as conn:
-            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+        # 开发环境允许自动启用扩展，生产环境要求由迁移/运维账号预先安装，
+        # 避免应用运行账号持有 CREATE EXTENSION 权限。
+        if get_settings().environment != "production":
+            with self._engine.begin() as conn:
+                conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         Base.metadata.create_all(self._engine)
 
     def add_document(self, text_content: str, metadata: dict[str, Any] | None = None) -> str:
@@ -123,17 +133,12 @@ class PgVectorStore:
 def _parse_vector(raw) -> list[float]:
     """解析 pgvector 文本表示（'[...]'）为 float 列表。"""
     s = str(raw).strip()
-    if s.startswith("["):
-        s = s[1:]
-    if s.endswith("]"):
-        s = s[:-1]
+    s = s.removeprefix("[").removesuffix("]")
     return [float(x) for x in s.split(",") if x.strip()]
 
 
 def _fuse(query: str, q_vec: list[float], chunks: list[dict], k: int) -> list[ScoredChunk]:
     """与内存版一致的 BM25 + RRF 融合（基于候选集近似全局 df）。"""
-    import math
-
     q_toks = set(_tokenize(query))
     n = len(chunks)
     df: dict[str, int] = {}

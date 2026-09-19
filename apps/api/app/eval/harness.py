@@ -1,7 +1,7 @@
 """评测流水线：一条命令跑全量 golden set，输出报告 + 门禁判定。
 
-CI 用法（见 .github/workflows/eval.yml）：
-    python -m app.eval.run --threshold 0.6
+CI 用法（见 .github/workflows/ci.yml）：
+    python -m app.eval.harness --threshold 0.6
 exit code !=0 表示未达到门禁，阻断合并。
 """
 

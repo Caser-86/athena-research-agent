@@ -4,34 +4,38 @@
 # 内置 obs 层已将 span 契约收敛，迁移时只需把 app/obs.py 的写入转发到这里。
 # 启动：docker compose -f deploy/docker-compose.observability.yml up -d
 # 本机无此需求可忽略本文件，项目不依赖它。
+# 使用前请在 deploy/.env 或宿主环境提供：
+# LANGFUSE_POSTGRES_USER、LANGFUSE_POSTGRES_PASSWORD、LANGFUSE_POSTGRES_DB、
+# LANGFUSE_DATABASE_URL、LANGFUSE_NEXTAUTH_URL、LANGFUSE_NEXTAUTH_SECRET、
+# LANGFUSE_SALT、LANGFUSE_ENCRYPTION_KEY、LANGFUSE_IMAGE、LANGFUSE_POSTGRES_IMAGE。
 services:
   postgres:
-    image: pgvector/pgvector:pg16
+    image: ${LANGFUSE_POSTGRES_IMAGE:?set LANGFUSE_POSTGRES_IMAGE to an audited image or digest}
     environment:
-      POSTGRES_USER: athena
-      POSTGRES_PASSWORD: athena_dev
-      POSTGRES_DB: athena
+      POSTGRES_USER: ${LANGFUSE_POSTGRES_USER:?set LANGFUSE_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${LANGFUSE_POSTGRES_PASSWORD:?set LANGFUSE_POSTGRES_PASSWORD}
+      POSTGRES_DB: ${LANGFUSE_POSTGRES_DB:?set LANGFUSE_POSTGRES_DB}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U athena"]
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
       interval: 5s
       timeout: 5s
       retries: 10
 
   langfuse:
-    image: langfuse/langfuse:latest
+    image: ${LANGFUSE_IMAGE:?set LANGFUSE_IMAGE to an audited version or digest}
     depends_on:
       postgres:
         condition: service_healthy
     environment:
-      DATABASE_URL: postgresql://athena:athena_dev@postgres:5432/athena
-      NEXTAUTH_URL: http://localhost:3000
-      NEXTAUTH_SECRET: change-me-please
-      SALT: change-me-too
-      ENCRYPTION_KEY: change-me-three
+      DATABASE_URL: ${LANGFUSE_DATABASE_URL:?set LANGFUSE_DATABASE_URL}
+      NEXTAUTH_URL: ${LANGFUSE_NEXTAUTH_URL:?set LANGFUSE_NEXTAUTH_URL}
+      NEXTAUTH_SECRET: ${LANGFUSE_NEXTAUTH_SECRET:?set LANGFUSE_NEXTAUTH_SECRET}
+      SALT: ${LANGFUSE_SALT:?set LANGFUSE_SALT}
+      ENCRYPTION_KEY: ${LANGFUSE_ENCRYPTION_KEY:?set LANGFUSE_ENCRYPTION_KEY}
       OTEL_EXPORTER_OTLP_ENABLED: "false"
     ports:
       - "3000:3000"

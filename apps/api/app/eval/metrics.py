@@ -82,7 +82,7 @@ def compute_metrics(case: GoldenCase, run: dict) -> MetricsBundle:
 
     # 2. 引用准确率：报告中出现的引用都能在前台证据里找到来源；无引用判 0
     cited = _extract_citations(report)
-    known_sources = set(f.get("source_ref", "") for f in findings)
+    known_sources = {f.get("source_ref", "") for f in findings}
     if report and not cited:
         citation_accuracy = 0.0
     else:

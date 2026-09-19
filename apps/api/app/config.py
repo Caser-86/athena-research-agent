@@ -1,6 +1,7 @@
 """环境配置：统一从 .env / 环境变量读取，前缀 ATHENA_。"""
 
 from functools import lru_cache
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -14,6 +15,9 @@ class Settings(BaseSettings):
     llm_base_url: str = "https://api.deepseek.com/v1"
     llm_api_key: str = ""
     llm_model: str = "deepseek-chat"
+
+    # 运行环境：production 启用更严格的网关默认值。
+    environment: Literal["development", "production"] = "development"
 
     # Embedding（未配置时 RAG 使用确定性演示向量）
     embedding_base_url: str = ""
@@ -47,6 +51,9 @@ class Settings(BaseSettings):
     # 已启用 vector 扩展的库，且安装 pgvector 依赖）。留空 = memory。
     vector_store: str = "memory"
 
+    # 本地文档解析允许的根目录；留空 = 禁止 MCP 读取本地文件。
+    doc_root: str = ""
+
     # API 鉴权：平台自身 API Key。留空 = 开放（本地演示）；生产务必设置，
     # 客户端请求头携带 `Authorization: Bearer <key>` 或 `X-API-Key: <key>`。
     api_key: str = ""
@@ -54,6 +61,9 @@ class Settings(BaseSettings):
     # CORS 允许的来源（逗号分隔）。留空且非生产 = 允许全部（本地开发）；
     # 设置后仅放行列表内来源，收敛跨域风险。
     cors_allowed_origins: str = ""
+
+    # Host 白名单（逗号分隔）。生产必须配置，开发环境默认允许所有主机。
+    allowed_hosts: str = ""
 
     @property
     def mock_mode(self) -> bool:

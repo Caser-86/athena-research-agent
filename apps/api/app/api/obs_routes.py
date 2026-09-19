@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from fastapi import APIRouter
 
 from app import obs
+from app.storage import get_storage
 
 router = APIRouter(prefix="/api/obs", tags=["observability"])
 
@@ -12,7 +15,10 @@ router = APIRouter(prefix="/api/obs", tags=["observability"])
 @router.get("/summary")
 async def obs_summary() -> dict:
     """聚合统计：调用数 / token / 总成本 / 时延 / 按 Agent 分账 / 最近任务。"""
-    return obs.summary()
+    # 任务总时延已随历史任务持久化；看板优先使用存储层样本，
+    # 这样进程重启后 P50/P95/P99 仍有明确统计口径。
+    latencies = await asyncio.to_thread(get_storage().list_task_latencies, 10_000)
+    return obs.summary(task_latencies=latencies)
 
 
 @router.get("/spans")

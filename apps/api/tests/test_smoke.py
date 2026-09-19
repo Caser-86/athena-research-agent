@@ -13,7 +13,6 @@ import pytest
 from app.graph.builder import build_research_graph
 from app.graph.events import EventBus
 
-
 QUESTION = "对比三个国产新能源品牌的销量与产品策略"
 
 
@@ -73,3 +72,40 @@ async def test_event_bus_emits_full_trajectory():
     assert len(critic_ends) >= 2, "演示模式下 Critic 应评审两轮"
     assert any(e["passed"] is False for e in critic_ends), "第 1 轮应打回"
     assert any(e["passed"] is True for e in critic_ends), "第 2 轮应通过"
+
+
+@pytest.mark.asyncio
+async def test_research_queue_marks_waiting_until_slot_is_acquired(monkeypatch):
+    import asyncio
+
+    from app.api import routes
+
+    entered = asyncio.Event()
+    release = asyncio.Event()
+
+    class Gate:
+        async def __aenter__(self):
+            entered.set()
+            await release.wait()
+
+        async def __aexit__(self, *_args):
+            return False
+
+    class FakeGraph:
+        async def ainvoke(self, *_args, **_kwargs):
+            return {"report": "ok", "iteration": 1}
+
+    monkeypatch.setattr(routes, "_concurrency", Gate())
+    monkeypatch.setattr(routes, "get_research_graph", lambda: FakeGraph())
+    task = asyncio.create_task(routes._run_graph("队列状态测试", "queue-test"))
+    try:
+        await entered.wait()
+        assert [item["task_id"] for item in routes._q_state()["waiting"]] == ["queue-test"]
+        release.set()
+        result = await task
+        assert result["report"] == "ok"
+        assert routes._q_state()["waiting"] == []
+    finally:
+        if not task.done():
+            release.set()
+            await task

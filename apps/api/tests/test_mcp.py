@@ -52,6 +52,12 @@ async def test_web_search_demo_mode():
 
 
 @pytest.mark.asyncio
+async def test_web_search_caps_result_count():
+    assert len(await _tool("web_search")("新能源销量", max_results=100)) == 10
+    assert len(await _tool("web_search")("新能源销量", max_results=-1)) == 0
+
+
+@pytest.mark.asyncio
 async def test_sql_query_blocks_non_select():
     rst = await _tool("sql_query")("DROP TABLE users", "nope.db")
     assert "只读" in rst["error"]
@@ -72,9 +78,63 @@ async def test_sql_query_readonly(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_sql_query_preserves_valid_sql_and_applies_row_cap(tmp_path):
+    import sqlite3
+
+    db = tmp_path / "limited.db"
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE t (a INTEGER)")
+    conn.executemany("INSERT INTO t VALUES (?)", [(1,), (2,), (3,)])
+    conn.commit()
+    conn.close()
+
+    rst = await _tool("sql_query")("SELECT a FROM t ORDER BY a DESC LIMIT 1;", str(db))
+    assert rst == [{"a": 3}]
+
+
+@pytest.mark.asyncio
+async def test_sql_query_rejects_multiple_statements(tmp_path):
+    import sqlite3
+
+    db = tmp_path / "statements.db"
+    conn = sqlite3.connect(db)
+    conn.execute("CREATE TABLE t (a INTEGER)")
+    conn.commit()
+    conn.close()
+
+    rst = await _tool("sql_query")("SELECT a FROM t; SELECT a FROM t", str(db))
+    assert "单条" in rst["error"]
+
+
+@pytest.mark.asyncio
+async def test_sql_query_disabled_for_arbitrary_paths_in_production(monkeypatch, tmp_path):
+    from app.config import get_settings
+
+    monkeypatch.setenv("ATHENA_ENVIRONMENT", "production")
+    get_settings.cache_clear()
+    try:
+        rst = await _tool("sql_query")("SELECT 1", str(tmp_path / "data.db"))
+        assert "生产环境" in rst["error"]
+    finally:
+        get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
 async def test_python_sandbox_blocks_danger():
     rst = await _tool("python_sandbox")("import os\nos.system('echo hi')")
     assert "拦截" in rst["error"]
+
+
+@pytest.mark.asyncio
+async def test_python_sandbox_blocks_indirect_imports():
+    rst = await _tool("python_sandbox")("from os import system\nsystem('echo hi')")
+    assert "拦截" in rst["error"]
+
+
+@pytest.mark.asyncio
+async def test_python_sandbox_rejects_invalid_timeout():
+    rst = await _tool("python_sandbox")("print(1)", timeout_seconds=-1)
+    assert "范围" in rst["error"]
 
 
 @pytest.mark.asyncio
@@ -84,8 +144,46 @@ async def test_python_sandbox_runs():
 
 
 @pytest.mark.asyncio
-async def test_doc_parser_local(tmp_path):
+async def test_python_sandbox_disabled_in_production(monkeypatch):
+    from app.config import get_settings
+
+    monkeypatch.setenv("ATHENA_ENVIRONMENT", "production")
+    get_settings.cache_clear()
+    try:
+        rst = await _tool("python_sandbox")("print(2+3)")
+        assert "生产环境" in rst["error"]
+    finally:
+        get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_doc_parser_local(tmp_path, monkeypatch):
+    from app.config import get_settings
+
     f = tmp_path / "note.md"
     f.write_text("# 标题\n正文内容 abc", encoding="utf-8")
-    rst = await _tool("doc_parser")(str(f))
-    assert "标题" in rst and "正文" in rst
+    monkeypatch.setenv("ATHENA_DOC_ROOT", str(tmp_path))
+    get_settings.cache_clear()
+    try:
+        rst = await _tool("doc_parser")(str(f))
+        assert "标题" in rst and "正文" in rst
+    finally:
+        get_settings.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_doc_parser_rejects_local_path_outside_configured_root(tmp_path, monkeypatch):
+    from app.config import get_settings
+
+    root = tmp_path / "allowed"
+    root.mkdir()
+    outside = tmp_path / "secret.txt"
+    outside.write_text("sensitive", encoding="utf-8")
+    monkeypatch.setenv("ATHENA_DOC_ROOT", str(root))
+    get_settings.cache_clear()
+    try:
+        rst = await _tool("doc_parser")(str(outside))
+        assert "允许目录" in rst
+        assert "sensitive" not in rst
+    finally:
+        get_settings.cache_clear()

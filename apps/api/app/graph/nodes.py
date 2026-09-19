@@ -3,8 +3,8 @@
 设计要点：
 - 每个节点 = 提示工程 + LLM 调用 + 事件推送（轨迹可观测）；
 - Critic 负责质量回路：不通过则带反馈打回 Researcher（路由见 builder.py）；
-- Researcher 的检索层可插拔：配置 TAVILY_API_KEY 走真实搜索，否则使用演示数据源
-  （第 2 周将替换为 RAG 混合检索 + MCP 工具服务）。
+- Researcher 的检索层可插拔：配置 ATHENA_TAVILY_API_KEY 走真实搜索，否则使用演示数据源
+  （当前已接入 RAG 混合检索与 MCP 工具服务）。
 """
 
 import asyncio
@@ -39,7 +39,7 @@ async def _search_subtask(
     config: RunnableConfig | None = None,
 ) -> dict[str, Any]:
     """按子任务检索：
-    - 配置 TAVILY_API_KEY 时经 MCP web_search 工具联网检索（统一走工具调用链）；
+    - 配置 ATHENA_TAVILY_API_KEY 时经 MCP web_search 工具联网检索（统一走工具调用链）；
     - 否则回退到本地 RAG 混合检索（真实检索轻量种子知识库，保证无 Key demo 基于真实内容）。
     """
     settings = get_settings()
@@ -184,6 +184,7 @@ async def researcher(state: ResearchState, config: RunnableConfig | None = None)
         config, "agent_end", agent="researcher", iteration=iteration,
         latency_ms=round((time.monotonic() - start) * 1000, 1),
         new_findings=len(new_findings), total_findings=len(findings),
+        search_results=search_results,
     )
     return {"search_results": search_results, "findings": findings}
 
@@ -220,6 +221,7 @@ async def analyst(state: ResearchState, config: RunnableConfig | None = None) ->
     await _emit(
         config, "agent_end", agent="analyst", iteration=iteration,
         latency_ms=round((time.monotonic() - start) * 1000, 1),
+        analysis=analysis,
     )
     return {"analysis": analysis}
 

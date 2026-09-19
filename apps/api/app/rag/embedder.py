@@ -83,8 +83,8 @@ def _embed_remote(text: str) -> list[float]:
     resp = _remote_client.embeddings.create(model=model, input=text)
     try:
         vec = resp.data[0].embedding
-    except Exception:  # pragma: no cover
-        raise RuntimeError(f"embedding 响应解析失败: {resp}")
+    except (AttributeError, IndexError, KeyError, TypeError) as exc:  # pragma: no cover
+        raise RuntimeError(f"embedding 响应解析失败: {resp}") from exc
     if _remote_dim is None:
         _remote_dim = len(vec)
     if len(vec) != _remote_dim:
